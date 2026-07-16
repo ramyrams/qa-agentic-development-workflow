@@ -1,0 +1,141 @@
+# Side-by-Side Comparisons: GitHub Copilot Customization Files
+### Companion to the Copilot Customization Framework — for the QA automation team
+
+Two comparisons in this document:
+- **Part A:** `*.instructions.md` vs `*.agent.md` vs `SKILL.md` vs `*.prompt.md` (the four customization primitives)
+- **Part B:** `README.md` vs `copilot-instructions.md` vs custom `*.instructions.md` (the three "repo documentation" files people conflate)
+
+---
+
+## PART A — The Four Customization Primitives, Dimension by Dimension
+
+### A.1 Identity & Location
+
+| Dimension | `*.instructions.md` | `*.agent.md` | `SKILL.md` | `*.prompt.md` |
+|---|---|---|---|---|
+| **What it is** | Always-on (or path-scoped) background rules | A specialist persona/mode with its own instructions and tool boundaries | A self-contained capability package (instructions + scripts + references + examples) | A reusable, parameterized task template |
+| **One-line job** | "How we do things here, always" | "Who is doing the work, and what they're allowed to touch" | "Deep know-how the agent pulls in when the task calls for it" | "A repeatable procedure a human kicks off" |
+| **File name pattern** | `NAME.instructions.md` | `AGENT-NAME.md` (agent name = file name) | Always literally `SKILL.md` | `NAME.prompt.md` |
+| **Repo location** | `.github/instructions/` (repo-wide variant: `.github/copilot-instructions.md`) | `.github/agents/` | `.github/skills/<skill-name>/SKILL.md` — the skill is the **folder**, not just the file | `.github/prompts/` |
+| **Personal / global variant** | VS Code user-profile instructions ("User Data" location) | User-profile agents; org/enterprise via `agents/` in a `.github-private` repo | `~/.copilot/skills/` (personal, all workspaces) | User-profile prompt files |
+| **Can bundle other files?** | No — a single Markdown file | No — a single Markdown file (but can reference repo files) | **Yes — its defining feature.** `scripts/`, `references/`, `examples/`, templates alongside SKILL.md | No — a single Markdown file (can link to repo files) |
+
+### A.2 Activation & Context Loading (the distinction that matters most)
+
+| Dimension | `*.instructions.md` | `*.agent.md` | `SKILL.md` | `*.prompt.md` |
+|---|---|---|---|---|
+| **Who triggers it** | Nobody — automatic | **Human** selects the agent (or a prompt file / handoff specifies it) | **The model** decides, based on task-vs-description match | **Human** invokes `/prompt-name` in chat |
+| **When it enters context** | Every request (repo-wide) or every request touching files matched by `applyTo` glob | For the duration of the chat session while that agent is active | Mid-task, when Copilot judges the skill relevant | Once, at the moment of invocation |
+| **Loading style** | Full file injected, always | Full agent definition active for the session | **Progressive disclosure**: name+description always visible → full SKILL.md loaded on match → bundled resources read on demand | Full file injected on invocation |
+| **Can it be "forgotten" by the user?** | No — that's the point | Yes — user might not select it | No — fires automatically *if* the description is well written | Yes — user must remember it exists |
+| **Can it fail to fire?** | Only if `applyTo` glob doesn't match the touched files | N/A (explicit selection) | **Yes — the #1 failure mode.** Vague description = skill never loads | N/A (explicit invocation) |
+| **Context cost** | Paid on **every request** — keep it short | Paid per session while active | Near-zero until triggered (only name+description), then pay-as-you-go | Paid only when invoked |
+| **Deactivation** | Remove file / narrow the glob | Switch agents | Model simply doesn't load it for unrelated tasks | Don't invoke it |
+
+**Memory hook for the team:** *Instructions = nobody triggers. Prompts = the human triggers. Agents = the human selects. Skills = the model triggers.*
+
+### A.3 Anatomy — Frontmatter & Body
+
+| Dimension | `*.instructions.md` | `*.agent.md` | `SKILL.md` | `*.prompt.md` |
+|---|---|---|---|---|
+| **Key frontmatter fields** | `applyTo:` (glob — required for path-scoping), `description:` | `name:`, `description:`, `tools:` (allow-list), optionally model | `name:`, `description:` (the trigger condition — most important line), optionally `allowed-tools:`, `license:` | `description:`, `agent:`/`mode:`, `tools:`, `model:` |
+| **Body content** | Short declarative rules and conventions; no procedures | Persona definition, behavioral rules, scope boundaries, handoff conditions | Detailed how-to instructions, when/how to run bundled scripts, pointers to references and examples | Step-by-step procedure with a beginning and an end |
+| **Supports input variables?** | No | No | No (but scripts can take arguments) | **Yes** — `${input:varName}`, selection/file variables |
+| **Ideal length** | Repo-wide: ~50–100 lines. Path-scoped: shorter | Half a page to a page | As long as needed — cost is deferred; push bulk into `references/` | Half a page; move reference bulk into a skill |
+| **Contains executable code?** | No | No | **Can** — bundled scripts the agent may run | No (but its procedure may tell the agent to run repo commands) |
+
+### A.4 Control, Scope & Composition
+
+| Dimension | `*.instructions.md` | `*.agent.md` | `SKILL.md` | `*.prompt.md` |
+|---|---|---|---|---|
+| **Can restrict tools?** | No — purely advisory text | **Yes — enforced.** The only primitive with hard tool boundaries | Partially — `allowed-tools` pre-approval (a convenience/risk lever, not a restriction mechanism) | Can specify a tool set for the run, and inherits the executing agent's limits |
+| **Enforcement strength** | Advisory — model *should* follow, may not always | **Enforced** — a read-only agent cannot edit, period | Advisory instructions + optionally pre-approved tools | Advisory procedure |
+| **Scope of effect** | Whole repo, or file paths matched by glob | The active chat session | The specific task the model matched it to | The single invoked run |
+| **Combines with the others?** | Applies underneath everything — agents, prompts, and skill-driven work all still receive instructions | Executes prompts; loads skills; layered on top of instructions | Loaded *by* whatever agent is active; complements instructions with depth | Can name an `agent:` to run under; benefits from instructions and any skills that fire |
+| **Interaction rule of thumb** | Carries **universal rules** | Carries **role + tool posture** | Carries **deep reference + helpers** | Carries **the procedure** |
+| **Duplication anti-pattern** | Don't restate in agents/prompts — it's already in context | Don't paste repo conventions in — only what's *different* for this role | Don't put one-line universal rules here — they belong in instructions | Don't embed the full playbook — reference the skill's territory instead |
+
+### A.5 Portability & Surface Support
+
+| Dimension | `*.instructions.md` | `*.agent.md` | `SKILL.md` | `*.prompt.md` |
+|---|---|---|---|---|
+| **VS Code Copilot Chat / agent mode** | Yes | Yes | Yes | Yes |
+| **Copilot coding agent (cloud)** | Yes (incl. path-specific) | Yes | Yes | Primarily an IDE/chat feature |
+| **Copilot code review** | Path-specific instructions apply | Not the mechanism used | Yes — review-relevant skills can be picked up (name review skills clearly, e.g. `code-review`) | No |
+| **Copilot CLI** | Yes | Yes | Yes | Limited/varies |
+| **Beyond GitHub Copilot** | `AGENTS.md` variant is an open, multi-agent format; `.instructions.md` is Copilot-specific | Copilot-specific format | **Open Agent Skills standard** — portable to other skill-compatible agents (e.g. Claude-based tools; `.claude/skills` is also read) | Copilot/VS Code-specific format |
+| **Best choice when tool-agnosticism matters** | Use `AGENTS.md` for the universal subset | — | **Skills — most portable primitive** | — |
+
+*(Surface support evolves quickly — verify against the GitHub customization cheat sheet when onboarding a new surface.)*
+
+### A.6 Risk, Governance & Maintenance
+
+| Dimension | `*.instructions.md` | `*.agent.md` | `SKILL.md` | `*.prompt.md` |
+|---|---|---|---|---|
+| **Primary risk** | Bloat/staleness silently degrades **every** generation in the repo | Over-permissive `tools:` list defeats the purpose | **Highest risk**: bundled scripts + third-party skills can carry prompt injections or malicious code; `allowed-tools: bash` removes the human confirmation gate | Drift — the procedure stops matching how the team actually works |
+| **Review posture** | Highest scrutiny per line (always-on) | Review the tool list like an IAM policy | Inspect full contents incl. scripts before adopting anything external; prefer writing your own | Normal PR review |
+| **Staleness blast radius** | Entire repo, every request | Sessions using that agent | Tasks that trigger it | Runs that invoke it |
+| **How you notice it's broken** | Generation quality drops everywhere; conventions violated | Agent does things outside its role | Skill never fires (bad description) or fires wrongly | Output no longer matches expectations on invocation |
+| **Testing approach** | Before/after eval on representative tasks | Verify tool boundaries by attempting out-of-scope actions | Verify triggering: run matching + non-matching tasks, confirm load behavior | Run it; grade output against your failure taxonomy |
+
+### A.7 QA-Team Decision Summary
+
+| You want to… | Use |
+|---|---|
+| Ban `cy.wait(ms)` and enforce `data-cy` selectors everywhere | `*.instructions.md` (path-scoped to specs) |
+| Give spec files different rules than page objects | Two `*.instructions.md` files with different `applyTo` globs |
+| Standardize "turn a user story into a spec" as a runnable procedure with inputs | `*.prompt.md` |
+| Guarantee the planning conversation can never edit files | `*.agent.md` with read-only tools |
+| Make your 2,000-line Cypress playbook + gold examples available without paying for it on every request | `SKILL.md` (skill folder) |
+| Ship a triage decision tree **with a script** that pulls CI history | `SKILL.md` — only skills bundle scripts |
+| Make know-how portable to non-Copilot agents | `SKILL.md` (+ `AGENTS.md` for universal rules) |
+
+---
+
+## PART B — `README.md` vs `copilot-instructions.md` vs custom `*.instructions.md`
+
+These three get conflated because all describe "how the repo works." They differ in **audience, loading behavior, and scope**.
+
+### B.1 Core Identity
+
+| Dimension | `README.md` | `.github/copilot-instructions.md` | `.github/instructions/*.instructions.md` |
+|---|---|---|---|
+| **Primary audience** | **Humans** — new team members, stakeholders, users of the repo | **The AI** — every Copilot request in the repo | **The AI** — requests touching specific paths |
+| **Is it read by Copilot?** | Only if the model/agent happens to open it while exploring (or you point at it) — **not injected automatically as an instruction** | **Yes — automatically injected into every request** | **Yes — automatically injected when the `applyTo` glob matches** the files in play |
+| **Is it read by humans?** | Yes — its whole purpose; rendered on the repo homepage | Rarely after authoring (should be reviewed like code) | Rarely after authoring |
+| **Location** | Repo root (also per-folder READMEs) | Exactly `.github/copilot-instructions.md` — one per repo | `.github/instructions/`, many files, each with its own glob |
+| **Frontmatter** | None (plain Markdown) | None needed | `applyTo:` glob (required for scoping), optional `description:` |
+| **Quantity** | Typically one root README (+ optional folder READMEs) | **Exactly one** | **As many as you need** — this is the scoping mechanism |
+
+### B.2 Content & Voice
+
+| Dimension | `README.md` | `copilot-instructions.md` | `*.instructions.md` |
+|---|---|---|---|
+| **Content type** | Orientation: what this repo is, why it exists, how to get started, how to contribute, badges, links, screenshots | Operative rules: architecture map, universal conventions, build/test/lint commands, hard "never" rules | Narrow operative rules for one file family (e.g., "in `cypress/e2e/**`: one behavior per `it`, intercept all XHR…") |
+| **Voice / framing** | Explanatory prose — persuade, orient, welcome | Directive, imperative, terse — every line is a rule the model should obey | Same directive voice, narrower scope |
+| **Rationale & backstory** | Belongs here — humans want the *why* | Mostly omit — rationale costs tokens on every request; keep only where it prevents misapplication | Omit; link a skill or doc if depth is needed |
+| **Length economics** | Length is nearly free — nobody pays a per-request cost | **Every line taxes every single request.** Target ~50–100 lines | Short; cost is paid only on matching requests |
+| **Duplication guidance** | May *summarize* conventions for humans and link out | **Source of truth** for AI-facing universal rules | Source of truth for AI-facing path rules |
+| **QA example content** | "This repo contains our e2e and API test suites for the customer portal. Prereqs: Node 20. Quick start: `npm i && npm run cy:open`. See CONTRIBUTING for the spec review checklist." | "Selectors: `data-cy` only. No `cy.wait(ms)`. Specs are order-independent. API tests clean up their data. Run `npm run lint` before PRs." | In `cypress-e2e.instructions.md`: "describe-per-feature, it-per-behavior; intercept+alias all network the test depends on; assert on aliases, not time." |
+
+### B.3 Behavior, Precedence & Maintenance
+
+| Dimension | `README.md` | `copilot-instructions.md` | `*.instructions.md` |
+|---|---|---|---|
+| **Scope of automatic effect** | None (documentation only) | Entire repo, every request | Only requests whose working files match the glob |
+| **How multiple sources combine** | N/A | Combines **additively** with any matching path-specific instructions (and org/personal instructions where configured) — there is no strict override hierarchy, so **conflicts confuse the model rather than resolve cleanly**. Keep the layers non-contradictory | Same — additive alongside repo-wide instructions; a path file should *refine*, never contradict, the repo-wide file |
+| **Failure mode when stale** | Humans get lost or run wrong commands; annoying but visible | AI silently generates against outdated conventions **everywhere** — the most damaging staleness of the three | AI misbehaves within one file family |
+| **Ownership model** | Docs owner / whole team | Named maintainer + PR review, treated as code | Same, often the sub-area's owner (e.g., API test lead owns `api-tests.instructions.md`) |
+| **When to update** | Onboarding friction, new setup steps | Any change to conventions, commands, or architecture the AI must respect | Changes local to that file family |
+
+### B.4 The Relationship Between the Three (how to think about it)
+
+1. **README.md orients humans; instructions files govern the AI.** Writing "for Copilot" content into the README doesn't reliably reach the model, and writing human onboarding prose into `copilot-instructions.md` wastes always-on context on material the AI doesn't need as rules.
+2. **`copilot-instructions.md` is the constitution; `*.instructions.md` files are local bylaws.** The repo-wide file carries the small set of universal, non-negotiable rules; path files carry everything that is only true for one part of the tree. If a rule starts with "in the e2e specs…", it does not belong in the repo-wide file.
+3. **They are additive, not overriding.** All matching instruction layers are injected together, so a contradiction between the repo-wide file and a path file doesn't "resolve" — it produces inconsistent behavior. The discipline: universal rules live in exactly one place; path files only add, narrow, or specialize.
+4. **A practical authoring pipeline:** mine the README + CONTRIBUTING + your PR review comments for the rules you keep repeating → distill the universal ones into `copilot-instructions.md` → push everything path-conditional into `*.instructions.md` files → leave the human narrative, setup story, and rationale in the README, with the README linking to the instructions files so humans know they exist.
+5. **Litmus test per line:** *"Is this a rule the AI must apply while generating?"* → instructions (repo-wide if universal, path file if conditional). *"Is this orientation, rationale, or setup narrative for a person?"* → README.
+
+---
+
+*Companion to: `copilot-customization-framework-qa.md` · Verify surface-support details against GitHub's customization cheat sheet on major Copilot releases.*
