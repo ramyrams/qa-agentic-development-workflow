@@ -1,1 +1,15 @@
+Seven files, and the most important thing about them is thatthey aren't hypothetical — I built and ran the script against real fixturesbefore writing anything down, and it caught a genuine bug in the process. Worthwalking through, since it's the best teaching moment in the whole demo:
+
+**The pre-scan script's first version had a real, silentdefect.** Its exit code was accidentally inherited from whatever grep happenedto run last, rather than being deliberately tied to whether blocking issuesexisted — which meant a clean file could exit 1 and a dirty file could exit 0,depending on match order. It _looked_ correct on a read-through. The unittest caught it in one run, comparing against the known-clean and known-dirtyfixtures. That's now built into eval-demo--cypress-code-review.md as theopening lesson, because it's a better argument for the policy than anything Icould have written abstractly — this is what "a human skim would likelyhave missed it, the eval found it in ten minutes" actually looks like inyour own stack, not as a claim.
+
+The seven files split into three roles:
+
+*   **The skill itself** (skill--SKILL.md, skill--review-rubric.md, skill--pre-scan.sh) is a real, drop-in-ready artifact — place them at the paths noted in the SKILL.md header and it works. It deliberately separates deterministic checks (the script — selector policy, hard waits, focused tests left in, blanket exception suppression, debug statements) from judgment-based review (the rubric — independence, assertion strength, negative-path coverage), the same split your Allure design and eval methodology use everywhere else.
+    
+*   **The eval demo** (eval-demo--cypress-code-review.md) is the literal walkthrough — five steps, real captured output, ending in a debrief section designed to be discussed with the team rather than just read. Step 2's most important case isn't about this skill being wrong at all — it's a confusable pair with your existing cypress-authoring skill ("write a test" vs. "review a test"), which is the same-capability-ambiguity failure mode from the terminology glossary showing up concretely.
+    
+*   **The policy** (policy--eval-gated-development.md) is the enforceable version of what you asked for: a per-asset-type minimum table, a CI step that structurally fails a build if a changed skill has _no_ matching eval file at all (not just a low score — a missing file), and an explicit statement that "we'll add the eval later" is the exact failure mode the policy exists to prevent. I put ownership on the asset's own author, not a separate eval team, deliberately — it keeps this a universal skill your L2 ladder already recognizes, not a specialist silo.
+    
+
+One practical note for using this as your actual demo: runStep 1 live in front of the team rather than presenting the bug as a faitaccompli — watching a real test catch a real bug in real time is a strongertraining moment than being told about one.
 
