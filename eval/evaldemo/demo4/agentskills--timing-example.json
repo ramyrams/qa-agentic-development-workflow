@@ -1,0 +1,5 @@
+{
+  "_note": "EXAMPLE VALUES — Copilot CLI's task completion data gives you the real total_tokens and duration_ms for your own run. Save them immediately per the source guidance; they aren't persisted anywhere else. These placeholder numbers are illustrative only.",
+  "total_tokens": 3400,
+  "duration_ms": 18500
+}

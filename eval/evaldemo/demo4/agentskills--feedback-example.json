@@ -1,0 +1,5 @@
+{
+  "_note": "EXAMPLE — fill this in yourself after reading real with_skill outputs against the rubric. Empty string means the output looked fine on human review.",
+  "eval-review-checkout-bad": "EXAMPLE: the review correctly caught all four blocking issues, but the suggestion about console.log was phrased as a command ('remove this') rather than the house style of 'what's wrong — the fix, one line' from SKILL.md's output format. Minor, but worth tightening in the next iteration.",
+  "eval-review-checkout-clean": ""
+}

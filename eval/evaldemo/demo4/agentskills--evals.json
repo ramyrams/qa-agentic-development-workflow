@@ -1,0 +1,30 @@
+{
+  "skill_name": "cypress-code-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Can you review cypress/e2e/checkout/pay.cy.js before I open the PR? Just tell me if there's anything blocking.",
+      "expected_output": "A structured review listing every convention violation as blocking, everything else as a suggestion, with file/line citations for each finding, ending in a clear merge-readiness verdict.",
+      "files": ["evals/files/bad-checkout.cy.js"],
+      "assertions": [
+        "The review flags a selector-policy violation on the line using cy.get('.promo-input')",
+        "The review flags a selector-policy violation on the line using cy.get('#apply-btn')",
+        "The review flags the hard wait cy.wait(3000) as blocking",
+        "The review flags describe.only as blocking",
+        "The review classifies every finding as either blocking or a suggestion, not left unclassified",
+        "The review ends with a clear verdict stating blocking issues are present"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Is cypress/e2e/checkout/pay.cy.js ready to merge?",
+      "expected_output": "A review confirming the spec is clean and merge-ready, with no invented or false-positive findings.",
+      "files": ["evals/files/good-checkout.cy.js"],
+      "assertions": [
+        "The review reports zero blocking findings",
+        "The review does not invent a selector-policy violation where none exists",
+        "The review ends with a verdict stating the spec is ready to merge"
+      ]
+    }
+  ]
+}

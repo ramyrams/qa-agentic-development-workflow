@@ -1,0 +1,48 @@
+{
+  "_note": "The four assertion results below marked source:script were captured by actually running check-assertions.sh against evals/files/bad-checkout.cy.js in this conversation's sandbox — that part is real. The two marked source:llm-judge-EXAMPLE are illustrative placeholders showing the shape of what an LLM grader run against your own captured with_skill output should produce. Replace those two once you've run the real agent session — see the walkthrough Step 4.",
+  "eval_id": 1,
+  "assertion_results": [
+    {
+      "text": "The review flags a selector-policy violation on the line using cy.get('.promo-input')",
+      "passed": true,
+      "evidence": "scripts/pre-scan.sh reported: {\"rule\":\"selector-policy\",...,\"line\":8,\"snippet\":\"    cy.get('.promo-input').type('SAVE10');\"}",
+      "source": "script"
+    },
+    {
+      "text": "The review flags a selector-policy violation on the line using cy.get('#apply-btn')",
+      "passed": true,
+      "evidence": "scripts/pre-scan.sh reported: {\"rule\":\"selector-policy\",...,\"line\":9,\"snippet\":\"    cy.get('#apply-btn').click();\"}",
+      "source": "script"
+    },
+    {
+      "text": "The review flags the hard wait cy.wait(3000) as blocking",
+      "passed": true,
+      "evidence": "scripts/pre-scan.sh reported: {\"rule\":\"hard-wait\",\"severity\":\"blocking\",...,\"line\":10,\"snippet\":\"    cy.wait(3000);\"}",
+      "source": "script"
+    },
+    {
+      "text": "The review flags describe.only as blocking",
+      "passed": true,
+      "evidence": "scripts/pre-scan.sh reported: {\"rule\":\"focused-test-left-in\",\"severity\":\"blocking\",...,\"line\":1,...}",
+      "source": "script"
+    },
+    {
+      "text": "The review classifies every finding as either blocking or a suggestion, not left unclassified",
+      "passed": true,
+      "evidence": "EXAMPLE — replace with a real quote from your captured with_skill/outputs/review.md once you run the actual agent session. This assertion needs an LLM judge or a human read, not the script, because it's about the shape of the agent's written review output.",
+      "source": "llm-judge-EXAMPLE"
+    },
+    {
+      "text": "The review ends with a clear verdict stating blocking issues are present",
+      "passed": true,
+      "evidence": "EXAMPLE — replace with a real quote from your captured output, e.g. \"4 blocking, 2 suggestions — blocking issues present\"",
+      "source": "llm-judge-EXAMPLE"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

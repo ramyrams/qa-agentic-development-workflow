@@ -1,0 +1,21 @@
+{
+  "_note": "EXAMPLE VALUES illustrating the shape and the story a real benchmark.json should tell for this skill. Compute your own from real with_skill and without_skill runs across both eval cases per the walkthrough. The specific numbers below are invented for illustration only.",
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": { "mean": 1.0, "stddev": 0.0 },
+      "time_seconds": { "mean": 19.0, "stddev": 3.0 },
+      "tokens": { "mean": 3400, "stddev": 250 }
+    },
+    "without_skill": {
+      "pass_rate": { "mean": 0.42, "stddev": 0.15 },
+      "time_seconds": { "mean": 14.0, "stddev": 2.0 },
+      "tokens": { "mean": 2100, "stddev": 300 }
+    },
+    "delta": {
+      "pass_rate": 0.58,
+      "time_seconds": 5.0,
+      "tokens": 1300
+    }
+  },
+  "_what_this_would_mean_if_real": "A 58-point pass-rate improvement for 5 extra seconds and ~1300 extra tokens is the kind of trade-off the source guidance calls 'probably worth it' — the skill costs a little more per run and reliably catches the blocking issues a baseline agent misses or reports inconsistently (note the much higher without_skill stddev — that's the baseline being unreliable about which issues it happens to notice, not just less thorough on average)."
+}
