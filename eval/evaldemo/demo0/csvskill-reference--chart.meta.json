@@ -1,0 +1,11 @@
+{
+  "months_plotted": [
+    "March",
+    "July",
+    "November"
+  ],
+  "month_count": 3,
+  "xlabel": "Month",
+  "ylabel": "Revenue ($)",
+  "title": "Top 3 Months by Revenue"
+}
