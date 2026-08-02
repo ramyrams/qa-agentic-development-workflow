@@ -1,0 +1,29 @@
+{
+  "skill_name": "csv-analyzer",
+  "iteration": 1,
+  "cases": [
+    {
+      "id": 1,
+      "name": "eval-top-months-chart",
+      "prompt": "I have a CSV of monthly sales data in data/sales_2025.csv. Can you find the top 3 months by revenue and make a bar chart?",
+      "expected_output": "A bar chart image showing the top 3 months by revenue, with labeled axes and values.",
+      "assertion_results": [
+        {"text": "The output includes a bar chart image file", "passed": true, "evidence": "chart.png present, 23377 bytes"},
+        {"text": "The chart shows exactly 3 months", "passed": true, "evidence": "meta.json: month_count=3 (March, July, November)"},
+        {"text": "Both axes are labeled", "passed": true, "evidence": "meta.json: xlabel='Month', ylabel='Revenue ($)'"},
+        {"text": "The chart title or caption mentions revenue", "passed": true, "evidence": "meta.json: title='Top 3 Months by Revenue'"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "eval-clean-missing-emails",
+      "prompt": "there's a csv in my downloads called customers.csv, some rows have missing emails — can you clean it up and tell me how many were missing?",
+      "expected_output": "A cleaned CSV with missing emails handled, plus a count of how many were missing.",
+      "assertion_results": [
+        {"text": "The cleaned CSV file exists", "passed": true, "evidence": "customers_cleaned.csv present, 7 data rows"},
+        {"text": "Missing emails are flagged, not silently dropped", "passed": true, "evidence": "3 rows flagged 'MISSING' (Bob Jones, David Lee, Frank Green)"},
+        {"text": "Row count is preserved (no customer records lost)", "passed": true, "evidence": "7 rows in, 7 rows out"}
+      ]
+    }
+  ]
+}

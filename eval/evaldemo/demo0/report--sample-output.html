@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Eval Report — csv-analyzer</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif;
+          background: #f6f7f9; color: #1a1a1a; margin: 0; padding: 2rem; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
+  .meta { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+  .summary { display: flex; gap: 1rem; margin-bottom: 2rem; }
+  .summary .card { background: white; border-radius: 8px; padding: 1rem 1.5rem;
+                     box-shadow: 0 1px 3px rgba(0,0,0,0.08); flex: 1; }
+  .summary .card .n { font-size: 1.8rem; font-weight: 700; }
+  .summary .card .l { color: #666; font-size: 0.85rem; }
+  .pass { color: #1a7f37; }
+  .fail { color: #cf222e; }
+  .case { background: white; border-radius: 8px; padding: 1.5rem;
+           margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .case h2 { font-size: 1.1rem; margin: 0 0 0.5rem 0; }
+  .prompt { background: #f0f2f5; border-radius: 6px; padding: 0.75rem 1rem;
+             font-size: 0.9rem; margin-bottom: 1rem; font-style: italic; }
+  .expected { font-size: 0.85rem; color: #555; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 2px solid #eee;
+        color: #666; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+  td { padding: 0.5rem; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px;
+            font-size: 0.75rem; font-weight: 700; }
+  .badge.pass { background: #dafbe1; color: #1a7f37; }
+  .badge.fail { background: #ffebe9; color: #cf222e; }
+  .evidence { color: #555; font-size: 0.85rem; }
+  .case-rate { float: right; font-size: 0.9rem; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Eval Report — csv-analyzer</h1>
+  <div class="meta">Iteration 1 · generated 2026-08-02 16:54 UTC</div>
+
+  <div class="summary">
+    <div class="card"><div class="n">2</div><div class="l">Test cases</div></div>
+    <div class="card"><div class="n pass">7</div><div class="l">Assertions passed</div></div>
+    <div class="card"><div class="n pass">0</div><div class="l">Assertions failed</div></div>
+    <div class="card"><div class="n">100.0%</div><div class="l">Overall pass rate</div></div>
+  </div>
+
+  
+  <div class="case">
+    <h2>eval-top-months-chart <span class="case-rate pass">4/4 passed</span></h2>
+    <div class="prompt">&ldquo;I have a CSV of monthly sales data in data/sales_2025.csv. Can you find the top 3 months by revenue and make a bar chart?&rdquo;</div>
+    <div class="expected"><strong>Expected:</strong> A bar chart image showing the top 3 months by revenue, with labeled axes and values.</div>
+    <table>
+      <tr><th style="width:55%">Assertion</th><th style="width:10%">Result</th><th>Evidence</th></tr>
+      
+      <tr>
+        <td>The output includes a bar chart image file</td>
+        <td><span class="badge pass">PASS</span></td>
+        <td class="evidence">chart.png present, 23377 bytes</td>
+      </tr>
+
+      <tr>
+        <td>The chart shows exactly 3 months</td>
+        <td><span class="badge pass">PASS</span></td>
+        <td class="evidence">meta.json: month_count=3 (March, July, November)</td>
+      </tr>
+
+      <tr>
+        <td>Both axes are labeled</td>
+        <td><span class="badge pass">PASS</span></td>
+        <td class="evidence">meta.json: xlabel=&#x27;Month&#x27;, ylabel=&#x27;Revenue ($)&#x27;</td>
+      </tr>
+
+      <tr>
+        <td>The chart title or caption mentions revenue</td>
+        <td><span class="badge pass">PASS</span></td>
+        <td class="evidence">meta.json: title=&#x27;Top 3 Months by Revenue&#x27;</td>
+      </tr>
+
+    </table>
+  </div>
+
+  <div class="case">
+    <h2>eval-clean-missing-emails <span class="case-rate pass">3/3 passed</span></h2>
+    <div class="prompt">&ldquo;there&#x27;s a csv in my downloads called customers.csv, some rows have missing emails — can you clean it up and tell me how many were missing?&rdquo;</div>
+    <div class="expected"><strong>Expected:</strong> A cleaned CSV with missing emails handled, plus a count of how many were missing.</div>
+    <table>
+      <tr><th style="width:55%">Assertion</th><th style="width:10%">Result</th><th>Evidence</th></tr>
+      
+      <tr>
+        <td>The cleaned CSV file exists</td>
+        <td><span class="badge pass">PASS</span></td>
+        <td class="evidence">customers_cleaned.csv present, 7 data rows</td>
+      </tr>
+
+      <tr>
+        <td>Missing emails are flagged, not silently dropped</td>
+        <td><span class="badge pass">PASS</span></td>
+        <td class="evidence">3 rows flagged &#x27;MISSING&#x27; (Bob Jones, David Lee, Frank Green)</td>
+      </tr>
+
+      <tr>
+        <td>Row count is preserved (no customer records lost)</td>
+        <td><span class="badge pass">PASS</span></td>
+        <td class="evidence">7 rows in, 7 rows out</td>
+      </tr>
+
+    </table>
+  </div>
+
+</div>
+</body>
+</html>
