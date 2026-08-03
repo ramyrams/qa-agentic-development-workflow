@@ -1,1 +1,16 @@
-xx
+Eight real, verified repos, organized by relevance to your exact setup. Two stand out enough to lead with:
+
+[**github/awesome-copilot**](https://github.com/github/awesome-copilot) is the closest match to what your team actually has — GitHub's own documentation points to it as a community-created collection, alongside skills shared in the anthropics/skills repository, that anyone can install and use with Copilot. It's organized around the same four primitives you've spent this whole conversation working with, not a generic AI-agent grab-bag. [GitHub](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)
+
+[**darkrishabh/agent-skills-eval**](https://github.com/darkrishabh/agent-skills-eval) is the one I'd actually have your team open first, because it's a maintained tool doing exactly what we built by hand this session. It runs every eval both ways so you can see the actual lift from the skill or its absence, uses any chat model as a judge with pass/fail graded against cited assertions rather than vibes, and implements the full agentskills.io specification — SKILL.md validation, evals/evals.json, the official iteration-N artifact layout, and frontmatter rules. Worth a genuine decision point for your team: keep hand-rolling bash/Python eval scripts against your own evals.json files, or adopt this and get the with/without comparison, judge grading, and a published report site for free. [GitHub](https://github.com/darkrishabh/agent-skills-eval)
+
+A few more worth knowing about for specific reasons:
+
+*   FrancyJGLisboa/agent-skill-creator ships runnable example skills that each pass through a validator, a pipeline check, and their own bundled eval spec, with one held-out golden case that no optimization loop ever sees — that last detail is a genuinely good idea worth studying on its own: a specific, concrete defense against a skill quietly overfitting to its own eval set, which is a failure mode nothing in our own demos explicitly guarded against. [GitHub](https://github.com/FrancyJGLisboa/agent-skill-creator)
+    
+*   **aws-samples/sample-agent-skill-eval** takes a different angle entirely — it's an evaluation framework measuring a skill's safety, quality, reliability, and cost efficiency, producing a scored audit report via skill-eval audit and skill-eval report — closer in spirit to your own audit checklist than to the with/without methodology, worth comparing what it checks against what you already do. [GitHub](https://github.com/aws-samples/sample-agent-skill-eval)
+    
+*   **anthropics/skills** is the reference implementation Anthropic itself publishes — a collection of self-contained skills demonstrating everything from creative applications to technical tasks to enterprise workflows, each with its own SKILL.md — good for seeing well-structured, production-quality examples of the primitive your team writes most often. [GitHub](https://github.com/anthropics/skills)
+    
+
+The file also includes the open standard's own spec repository and a GitHub topic page (skill-testing) that aggregates this whole ecosystem, worth a periodic look since new tools keep showing up there. I verified every link came directly from search results rather than memory, given how easy it is to hallucinate a plausible-looking but wrong GitHub URL.
