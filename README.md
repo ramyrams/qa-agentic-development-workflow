@@ -1,3 +1,8 @@
+
+https://x.com/techyoutbe/status/2096623988227404243?s=46
+
+
+
 # qa-agentic-development-workflow
 
 
