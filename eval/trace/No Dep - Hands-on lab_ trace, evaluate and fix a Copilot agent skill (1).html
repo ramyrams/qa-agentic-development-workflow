@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hands-on lab: trace, evaluate and fix a Copilot agent skill</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F5F8F7; --surface:#FFFFFF; --ink:#16282B; --muted:#55686B; --line:#D3DFDD;
+  --teal:#0E6E6B; --teal-soft:#E0EFED; --ochre:#A86E14; --ochre-soft:#FAF0DC;
+  --bad:#AE3B33; --bad-soft:#F8E3E1; --good:#2A7A4B; --good-soft:#E0F1E6;
+  --serif:"Fraunces", Georgia, "Times New Roman", serif;
+  --sans:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F1A1C; --surface:#16252A; --ink:#E4EEED; --muted:#9DB2B1; --line:#2A3E42;
+    --teal:#56C4BA; --teal-soft:#16332F; --ochre:#E2AD4E; --ochre-soft:#382C16;
+    --bad:#F08A80; --bad-soft:#3B1F1C; --good:#72CF98; --good-soft:#173324;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F1A1C; --surface:#16252A; --ink:#E4EEED; --muted:#9DB2B1; --line:#2A3E42;
+  --teal:#56C4BA; --teal-soft:#16332F; --ochre:#E2AD4E; --ochre-soft:#382C16;
+  --bad:#F08A80; --bad-soft:#3B1F1C; --good:#72CF98; --good-soft:#173324;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-behavior:smooth;scroll-padding-top:calc(env(safe-area-inset-top,0px) + 64px)}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+img,svg{max-width:100%}
+a{color:var(--teal)}
+:focus-visible{outline:3px solid var(--ochre);outline-offset:2px;border-radius:4px}
+h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.2;margin:0}
+h2{font-size:clamp(1.7rem,3.2vw,2.3rem);letter-spacing:-.01em}
+h3{font-size:1.2rem}
+p{margin:0 0 1em}
+code{font-family:var(--mono);font-size:.88em;background:var(--teal-soft);padding:.1em .35em;border-radius:4px}
+
+/* progress + top bar */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--paper);border-bottom:1px solid var(--line)}
+.topbar-inner{display:flex;align-items:center;gap:1rem;max-width:1180px;margin:0 auto;padding:.7rem 1.25rem}
+.brand{font-family:var(--serif);font-weight:600;font-size:1.05rem;white-space:nowrap}
+.brand span{color:var(--muted);font-family:var(--sans);font-weight:400;font-size:.9rem;margin-left:.4rem}
+.progress{height:3px;background:transparent}
+.progress i{display:block;height:100%;width:0;background:var(--teal)}
+.theme-btn{margin-left:auto;background:none;border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:.3rem .8rem;font:500 .85rem var(--sans);cursor:pointer}
+
+/* layout */
+.layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:3rem;max-width:1180px;margin:0 auto;padding:0 1.25rem}
+nav.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 70px);align-self:start;padding:2rem 0;max-height:calc(100vh - 80px);overflow:auto}
+.toc ol{list-style:none;margin:0;padding:0;counter-reset:m}
+.toc li a{display:block;padding:.35rem .6rem;border-left:2px solid var(--line);color:var(--muted);text-decoration:none;font-size:.9rem;line-height:1.35}
+.toc li a:hover{color:var(--ink)}
+.toc li a.active{border-left-color:var(--teal);color:var(--ink);font-weight:500}
+.toc .num{display:inline-block;width:1.6em;color:var(--teal);font-variant-numeric:tabular-nums}
+main{min-width:0;padding-bottom:5rem}
+section{padding:3.5rem 0 1rem;border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:0}
+.prose{max-width:68ch}
+.sec-head{display:flex;align-items:baseline;gap:1rem;margin-bottom:1.25rem}
+.sec-num{font-family:var(--serif);font-size:2.6rem;color:var(--teal);line-height:1;font-variant-numeric:lining-nums}
+.watch{font-size:.85rem;color:var(--muted);margin:-.6rem 0 1.5rem}
+.watch a{color:var(--muted)}
+
+/* hero */
+.hero{padding:3.5rem 0 2.5rem;border-bottom:1px solid var(--line)}
+.hero h1{font-size:clamp(2.2rem,5.2vw,3.6rem);letter-spacing:-.02em;max-width:18ch;font-weight:700}
+.hero .lede{font-size:1.15rem;color:var(--muted);max-width:60ch;margin:1rem 0 2rem}
+.demo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.25rem;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1.25rem}
+.panel h3{font-family:var(--sans);font-size:.9rem;font-weight:600;color:var(--muted);margin-bottom:.9rem}
+.bubble{border-radius:12px;padding:.7rem .95rem;margin-bottom:.6rem;max-width:92%;font-size:.95rem}
+.bubble.user{background:var(--teal-soft);margin-left:auto}
+.bubble.agent{background:var(--paper);border:1px solid var(--line)}
+.who{display:block;font-size:.75rem;color:var(--muted);margin-bottom:.15rem}
+.btn{font:600 .9rem var(--sans);border-radius:999px;padding:.55rem 1.1rem;cursor:pointer;border:1px solid var(--teal);background:var(--teal);color:var(--surface)}
+.btn.ghost{background:transparent;color:var(--teal)}
+.btn-row{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:.9rem}
+.verdict{margin-top:.9rem;font-size:.95rem;padding:.75rem .9rem;border-radius:10px;display:none}
+.verdict.show{display:block}
+.verdict.bad{background:var(--bad-soft);color:var(--ink);border-left:4px solid var(--bad)}
+.verdict.good{background:var(--good-soft);color:var(--ink);border-left:4px solid var(--good)}
+.hidden-trace{opacity:.35;filter:blur(3px);transition:opacity .4s, filter .4s;pointer-events:none}
+.hidden-trace.open{opacity:1;filter:none;pointer-events:auto}
+
+/* trace rail */
+.rail{list-style:none;margin:0;padding:0;position:relative}
+.rail::before{content:"";position:absolute;left:11px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.span{position:relative;padding:0 0 .7rem 2.1rem}
+.span::before{content:"";position:absolute;left:5px;top:.55rem;width:14px;height:14px;border-radius:50%;background:var(--surface);border:3px solid var(--teal)}
+.span.kind-tool::before{border-color:var(--ochre);border-radius:3px}
+.span.kind-user::before{background:var(--teal)}
+.span.err::before{border-color:var(--bad);background:var(--bad)}
+.span-btn{width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.55rem .8rem;cursor:pointer;color:var(--ink);font:500 .92rem var(--sans);display:flex;gap:.6rem;align-items:center}
+.span-btn:hover{border-color:var(--teal)}
+.span-btn .tag{font:500 .72rem var(--sans);padding:.12rem .5rem;border-radius:999px;background:var(--teal-soft);color:var(--teal);white-space:nowrap}
+.span.kind-tool .tag{background:var(--ochre-soft);color:var(--ochre)}
+.span.err .tag{background:var(--bad-soft);color:var(--bad)}
+.span-btn .chev{margin-left:auto;color:var(--muted);transition:transform .2s}
+.span-btn[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.span-body{display:none;margin-top:.4rem;padding:.7rem .85rem;border-radius:10px;background:var(--paper);border:1px dashed var(--line);font-size:.9rem}
+.span-body.open{display:block}
+.kv{font-family:var(--mono);font-size:.82rem;white-space:pre-wrap;word-break:break-word;margin:.3rem 0 0}
+.span-body .lbl{font-size:.75rem;color:var(--muted);font-weight:600;display:block;margin-top:.4rem}
+.span-body .lbl:first-child{margin-top:0}
+.errtxt{color:var(--bad)}
+
+/* callouts */
+.arc{display:grid;gap:.9rem;margin:1.5rem 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1rem 1.15rem}
+.card h3{font-family:var(--sans);font-size:.95rem;font-weight:600;margin-bottom:.35rem}
+.hook{border-left:4px solid var(--ochre)}
+.hook h3{color:var(--ochre)}
+.bridge h3{color:var(--teal)}
+.define{background:var(--teal-soft);border-color:transparent}
+.define p{font-family:var(--serif);font-size:1.12rem;line-height:1.55;margin:0}
+.define h3{color:var(--teal)}
+.why{border-left:4px solid var(--teal)}
+.confuse{background:var(--ochre-soft);border:0;border-radius:12px;padding:1rem 1.15rem;margin:1.5rem 0}
+.confuse h3{font-family:var(--sans);font-size:.95rem;font-weight:600;margin-bottom:.6rem}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.vs strong{display:block;margin-bottom:.2rem}
+.vs p{font-size:.93rem;margin:0}
+ul.plain{padding-left:1.2rem;margin:.2rem 0 1em}
+ul.plain li{margin-bottom:.35rem}
+
+/* objectives */
+.objectives{counter-reset:o;list-style:none;padding:0;margin:1.5rem 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:.75rem}
+.objectives li{counter-increment:o;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.8rem .95rem .8rem 2.6rem;position:relative;font-size:.93rem}
+.objectives li::before{content:counter(o);position:absolute;left:.9rem;top:.72rem;font-family:var(--serif);font-weight:600;color:var(--teal)}
+
+/* exercise frame */
+.exercise{margin:2rem 0;background:var(--surface);border:2px solid var(--teal);border-radius:14px;padding:1.25rem}
+.exercise > h3{font-family:var(--sans);font-size:1rem;font-weight:600;margin-bottom:.3rem}
+.exercise > .sub{color:var(--muted);font-size:.9rem;margin-bottom:1rem}
+.two{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:1.25rem}
+
+/* quiz */
+.q{padding:.9rem 0;border-top:1px solid var(--line)}
+.q:first-child{border-top:0;padding-top:0}
+.q-prompt{font-weight:500;margin-bottom:.55rem}
+.opts{display:flex;flex-wrap:wrap;gap:.45rem}
+.opt{font:500 .88rem var(--sans);background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:.4rem .85rem;cursor:pointer;text-align:left}
+.opt:hover:not([disabled]){border-color:var(--teal)}
+.opt[disabled]{cursor:default}
+.opt.right{background:var(--good-soft);border-color:var(--good);color:var(--ink)}
+.opt.wrong{background:var(--bad-soft);border-color:var(--bad);color:var(--ink)}
+.stack .opts{flex-direction:column;align-items:stretch}
+.stack .opt{border-radius:10px}
+.fb{font-size:.9rem;margin-top:.55rem;display:none}
+.fb.show{display:block}
+.fb b{margin-right:.3rem}
+.score{margin-top:1rem;font-weight:600}
+.reset{margin-top:.8rem}
+
+/* lifecycle stepper */
+.stepper-track{display:flex;gap:4px;margin-bottom:1rem}
+.stepper-track button{flex:1;height:8px;border:0;border-radius:4px;background:var(--line);cursor:pointer;padding:0}
+.stepper-track button.done{background:var(--teal)}
+.stepper-track button.cur{background:var(--ochre)}
+.phase{font-size:.8rem;color:var(--muted);font-weight:500}
+.step-title{font-family:var(--serif);font-size:1.5rem;margin:.1rem 0 .6rem}
+.ask{background:var(--ochre-soft);border-radius:10px;padding:.7rem .9rem;font-size:.93rem;margin:.8rem 0}
+.step-nav{display:flex;justify-content:space-between;align-items:center;margin-top:1rem;gap:.6rem}
+.step-nav .count{color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;margin:1rem 0}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:520px}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.8rem}
+tr.flagged td{background:var(--bad-soft)}
+.pill{display:inline-block;font-size:.75rem;font-weight:600;padding:.1rem .55rem;border-radius:999px}
+.pill.pass{background:var(--good-soft);color:var(--good)}
+.pill.fail{background:var(--bad-soft);color:var(--bad)}
+.pill.wait{background:var(--line);color:var(--muted)}
+.rules{display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;margin:.4rem 0 .6rem}
+.rules label{display:flex;gap:.4rem;align-items:center;font-size:.9rem;cursor:pointer}
+.rules input{accent-color:var(--teal);width:1rem;height:1rem}
+.flag-count{font-size:.9rem;color:var(--muted)}
+
+/* rubric */
+.rubric{display:grid;grid-template-columns:auto 1fr;gap:.4rem 1rem;font-size:.93rem}
+.rubric dt{font-weight:600}
+.rubric dd{margin:0}
+
+/* evaluator ladder */
+.ladder{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;margin:1.25rem 0}
+.rung{border:1px solid var(--line);border-radius:12px;padding:1rem;background:var(--surface)}
+.rung .cost{font-size:.78rem;color:var(--muted);margin-bottom:.4rem;display:block}
+.rung h3{font-family:var(--sans);font-size:1rem;font-weight:600;margin-bottom:.4rem}
+.rung p{font-size:.9rem;margin:0 0 .5rem}
+.rung .eg{font-size:.85rem;color:var(--muted);margin:0}
+
+/* lab */
+.lab-steps{counter-reset:s;list-style:none;padding:0;margin:0}
+.lab-steps li{counter-increment:s;position:relative;padding:0 0 1rem 2.6rem}
+.lab-steps li::before{content:counter(s);position:absolute;left:0;top:0;width:1.8rem;height:1.8rem;border-radius:50%;background:var(--teal-soft);color:var(--teal);font-weight:600;display:grid;place-items:center;font-size:.9rem}
+.lab-steps .rat{display:block;color:var(--muted);font-size:.9rem}
+.check-row{display:flex;gap:.5rem;align-items:flex-start}
+.check-row input{margin-top:.35rem;accent-color:var(--teal)}
+
+/* takeaways + glossary */
+.take{list-style:none;padding:0;margin:0;display:grid;gap:.6rem}
+.take li{padding:.8rem 1rem;border-left:3px solid var(--teal);background:var(--surface);border-radius:0 10px 10px 0}
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.6rem}
+.gloss details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.7rem .9rem}
+.gloss summary{cursor:pointer;font-weight:600}
+.gloss p{margin:.4rem 0 0;font-size:.92rem}
+footer{color:var(--muted);font-size:.85rem;padding:2rem 0}
+
+@media (max-width: 900px){
+  .layout{grid-template-columns:1fr;gap:0}
+  nav.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 50px);z-index:10;background:var(--paper);padding:.4rem 0;max-height:none;overflow-x:auto;border-bottom:1px solid var(--line);margin:0 -1.25rem;padding-left:1.25rem}
+  .toc ol{display:flex;gap:.2rem;white-space:nowrap}
+  .toc li a{border-left:0;border-bottom:2px solid transparent;padding:.35rem .55rem}
+  .toc li a.active{border-bottom-color:var(--teal)}
+  .demo,.two,.vs,.ladder{grid-template-columns:1fr}
+  .brand span{display:none}
+}
+@media print{.topbar,nav.toc,.btn,.theme-btn{display:none}.layout{display:block}.hidden-trace{opacity:1;filter:none}.span-body{display:block}}
+.time{margin-left:auto;font-size:.85rem;color:var(--muted);white-space:nowrap}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem}
+.meta-grid .card p{margin:0;font-size:.93rem}
+.obj{font-size:1.02rem}
+.code{position:relative;margin:.55rem 0 .35rem;background:var(--ink);color:var(--paper);border-radius:10px}
+.code pre{margin:0;padding:.8rem 4.8rem .8rem .95rem;overflow-x:auto;font:.86rem/1.55 var(--mono);white-space:pre}
+.copy{position:absolute;top:.45rem;right:.45rem;font:600 .75rem var(--sans);background:var(--paper);color:var(--ink);border:0;border-radius:999px;padding:.25rem .7rem;cursor:pointer}
+.lab-steps li{padding-bottom:1.2rem}
+.lab-steps .rat{margin-top:.25rem}
+.expected,.checkpoint{border-radius:12px;padding:1rem 1.15rem;margin:1.25rem 0}
+.expected{background:var(--good-soft);border-left:4px solid var(--good)}
+.checkpoint{background:var(--teal-soft);border-left:4px solid var(--teal)}
+.expected h3,.checkpoint h3{font-family:var(--sans);font-size:.95rem;font-weight:600;margin-bottom:.35rem}
+details.hint{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.7rem .9rem;margin:1rem 0}
+details.hint summary{cursor:pointer;font-weight:600}
+details.hint p{margin:.5rem 0 0;font-size:.93rem}
+.flow{list-style:none;counter-reset:f;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.6rem;padding:0;margin:.4rem 0 0}
+.flow li{counter-increment:f;background:var(--teal-soft);border-radius:10px;padding:.7rem .8rem;font-size:.88rem}
+.flow li strong{display:block;font-family:var(--serif);font-size:1.05rem;color:var(--teal)}
+.flow li strong::before{content:counter(f) ". "}
+.flow li span{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">Skill evals lab<span>VS Code · GitHub Copilot · Claude Sonnet 5</span></div>
+    <button class="theme-btn" id="themeBtn" type="button">Dark mode</button>
+  </div>
+  <div class="progress"><i id="prog"></i></div>
+</div>
+
+<div class="layout">
+<nav class="toc" aria-label="Lab steps">
+  <ol id="toc">
+    <li><a href="#start"><span class="num">·</span>Overview</a></li>
+    <li><a href="#s0"><span class="num">0</span>Set up</a></li>
+    <li><a href="#s1"><span class="num">1</span>Meet the skill</a></li>
+    <li><a href="#s2"><span class="num">2</span>Run the cases</a></li>
+    <li><a href="#s3"><span class="num">3</span>Read traces</a></li>
+    <li><a href="#s4"><span class="num">4</span>Open coding</a></li>
+    <li><a href="#s5"><span class="num">5</span>Axial coding</a></li>
+    <li><a href="#s6"><span class="num">6</span>Detect and investigate</a></li>
+    <li><a href="#s7"><span class="num">7</span>Rubrics and evals</a></li>
+    <li><a href="#s8"><span class="num">8</span>Fix the skill</a></li>
+    <li><a href="#s9"><span class="num">9</span>Catch a regression</a></li>
+    <li><a href="#proof"><span class="num">✓</span>Reference run</a></li>
+    <li><a href="#wrap"><span class="num">→</span>Wrap-up</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero" id="start">
+  <h1>Hands-on lab: trace, evaluate and fix a Copilot agent skill</h1>
+  <p class="lede">The system under test is a real GitHub Copilot custom agent and its skill, running on Claude Sonnet 5. You'll run customer cases through it, read the traces it leaves behind, find failure patterns, turn them into evals, fix the skill, and prove the fix with a regression suite. It needs no API keys and no packages, only VS Code, Copilot and Node.js.</p>
+  <div class="meta-grid">
+    <div class="card"><h3>Time</h3><p>About 100 minutes, or 15 minutes as a presenter demo.</p></div>
+    <div class="card"><h3>Who it's for</h3><p>Engineers who write Copilot agents, skills and prompt files, and the QA engineers who test them.</p></div>
+    <div class="card"><h3>What you'll leave with</h3><p>An error taxonomy, five evals, a fixed SKILL.md, and a regression suite that forces a re-run whenever the skill changes.</p></div>
+  </div>
+  <div class="card" style="margin-top:1rem"><h3>How the loop works</h3>
+    <ol class="flow">
+      <li><strong>Run</strong><span>The Maple Support agent handles cases using its skill</span></li>
+      <li><strong>Trace</strong><span>The skill's tool script records every call to <code>runs/</code></span></li>
+      <li><strong>Find</strong><span>Read, open-code, cluster, detect, investigate</span></li>
+      <li><strong>Eval</strong><span>Write rubrics and deterministic evals</span></li>
+      <li><strong>Fix</strong><span>Change SKILL.md, re-run the cases, and <code>npm test</code></span></li>
+    </ol>
+  </div>
+</header>
+
+<section id="s0">
+  <div class="sec-head"><span class="sec-num">0</span><h2>Set up</h2><span class="time">10 min</span></div>
+  <div class="prose">
+    <ol class="lab-steps">
+      <li><strong>Check your tools:</strong> VS Code with GitHub Copilot Chat signed in, and Node.js 20+ (<code>node -v</code>). Nothing to install.<span class="rat">The only runtime is Node. The "AI" is Copilot itself.</span></li>
+      <li><strong>Unzip <code>maple-skill-lab-starter.zip</code></strong> and open the folder in VS Code. Push it to an Azure DevOps repo if you want your changes tracked.<span class="rat">You'll commit after the eval step and after the fix, so you can diff the skill.</span></li>
+      <li><strong>In Copilot Chat, pick Agent mode and Claude Sonnet 5.</strong><span class="rat">If Sonnet 5 isn't in the picker, your admin may need to enable its model policy. Another Claude model works, but your traces will differ from the reference run.</span></li>
+      <li><strong>Check the customizations loaded.</strong> The agents dropdown should list <em>Maple Support</em>, <em>Trace Investigator</em>, <em>eval-writer</em> and <em>skill-fixer</em>. Typing <code>/</code> should show <em>run-cases</em>, <em>open-code</em> and <em>cluster-issues</em>.<span class="rat">These all live in <code>.github/</code>. The lab uses every Copilot customization type: instructions, a scoped instructions file, custom agents with handoffs, prompt files and skills.</span></li>
+    </ol>
+    <div class="card"><h3>Two sides of the repo</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Side</th><th>Files</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td>System under test</td><td><code>.github/agents/maple-support.agent.md</code>, <code>.github/skills/maple-support/</code>, <code>cases/</code>, <code>data/</code></td><td>Handles customer cases. Its tool script writes the traces.</td></tr>
+          <tr><td>Evaluation</td><td><code>evals/</code>, <code>scripts/</code>, <code>tests/</code>, <code>review/</code>, and the investigator, eval-writer and skill-fixer agents</td><td>Reads traces, finds failures, writes evals, fixes the skill.</td></tr>
+        </tbody>
+      </table></div>
+      <p style="font-size:.92rem;margin:.6rem 0 0">The Maple Support agent is told never to open the evaluation side. If the agent under test can see the tests, you end up measuring whether it can pass the tests, not whether it follows policy.</p>
+    </div>
+  </div>
+</section>
+
+<section id="s1">
+  <div class="sec-head"><span class="sec-num">1</span><h2>Meet the skill under test</h2><span class="time">5 min</span></div>
+  <div class="prose">
+    <ol class="lab-steps">
+      <li>Open <code>.github/skills/maple-support/SKILL.md</code> and <code>data/policies/</code> side by side.<span class="rat">The policies define correct behavior. The skill is the thing being tested, and it might be wrong.</span></li>
+      <li>Open <code>.github/skills/maple-support/scripts/maple.js</code> and find the <code>record()</code> function.<span class="rat">This is the instrumentation. Every tool call the agent makes is written as a span with input, output, status and timing. The trace also stores a hash of SKILL.md, so you always know which skill version produced it.</span></li>
+      <li><strong>Predict:</strong> write down any instruction in the skill that you think will cause a policy violation.<span class="rat">You'll compare your prediction with what the traces show. Most people find two or three of the five problems by reading alone.</span></li>
+    </ol>
+    <div class="confuse"><h3>Which spans can you trust?</h3>
+      <div class="vs">
+        <div><strong>Tool spans</strong><p>Recorded by the script from what actually happened. The model can't fake them.</p></div>
+        <div><strong>Note and reply spans</strong><p>Written by the model itself. A note says what the model <em>claims</em> it decided. Check it against the tool spans.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s2">
+  <div class="sec-head"><span class="sec-num">2</span><h2>Run the cases and collect traces</h2><span class="time">10 min</span></div>
+  <div class="prose">
+    <ol class="lab-steps">
+      <li>In Copilot Chat run:
+        <div class="code"><button class="copy" type="button">Copy</button><pre>/run-cases cases=all</pre></div><span class="rat">The prompt file switches to the Maple Support agent, which handles each of the 12 cases in <code>cases/</code> with the skill. Approve each terminal command, or allow it for the session if your organization permits.</span></li>
+      <li>When it finishes, run:
+        <div class="code"><button class="copy" type="button">Copy</button><pre>npm run list
+npm test</pre></div><span class="rat"><code>list</code> shows every case's input and reply. <code>npm test</code> runs the regression suite on the 7 starter golden cases with the single starter eval.</span></li>
+      <li>Commit the traces: <code>git add runs && git commit -m "v1 traces"</code>.<span class="rat">These are your baseline "production" traces.</span></li>
+    </ol>
+    <div class="expected"><h3>Expected</h3><p style="margin:0">Twelve files in <code>runs/</code>, and <code>npm test</code> green. As in the module, the suite passes because it can only catch what its one eval checks.</p></div>
+    <details class="hint"><summary>No Copilot access, or the run stalls?</summary><p>Copy the recorded reference run into place with <code>cp samples/reference-v1-runs/*.json runs/</code> and continue. It was produced by following SKILL.md v1 literally, so it shows every seeded flaw.</p></details>
+    <div class="confuse"><h3>Batch or one chat per case?</h3><p style="margin:0;font-size:.95rem">Running all 12 cases in one chat is quick, but earlier cases stay in the model's context and can influence later ones. Production runs are independent. If a case behaves oddly, re-run it alone with <code>/run-cases cases=C-07</code> in a new chat. Running <code>start</code> again replaces that case's trace.</p></div>
+  </div>
+</section>
+
+<section id="s3">
+  <div class="sec-head"><span class="sec-num">3</span><h2>Read traces by hand</h2><span class="time">10 min</span></div>
+  <div class="prose">
+    <ol class="lab-steps">
+      <li>Read a correct run first:
+        <div class="code"><button class="copy" type="button">Copy</button><pre>npm run view -- C-06</pre></div>Find the span showing the $649 total, the note explaining the decision, and the <code>create_ticket</code> and <code>escalate</code> calls.</li>
+      <li>Now compare two more:
+        <div class="code"><button class="copy" type="button">Copy</button><pre>npm run view -- C-07
+npm run view -- C-09</pre></div><span class="rat">Read the reply first, then the spans. Ask whether the reply would pass if it were all you saw.</span></li>
+      <li>Check a note against the tool spans. Does the model's stated reason match what the tools returned?</li>
+    </ol>
+    <div class="checkpoint"><h3>Checkpoint</h3><p style="margin:0">The reply is often fine while the path is wrong. The model will usually explain its bad decision very clearly in a note, because the skill told it to act that way. That's why you judge against the policy, not against the skill.</p></div>
+  </div>
+</section>
+
+<section id="s4">
+  <div class="sec-head"><span class="sec-num">4</span><h2>Open coding</h2><span class="time">10 min</span></div>
+  <div class="prose">
+    <ol class="lab-steps">
+      <li>Run:
+        <div class="code"><button class="copy" type="button">Copy</button><pre>/open-code</pre></div><span class="rat">Copilot reads every trace and appends free-form notes to <code>review/open-coding.md</code>, one row per problem with the evidence span.</span></li>
+      <li><strong>Verify each note yourself</strong> with <code>npm run view -- &lt;case&gt;</code>. Fix, delete or add notes.<span class="rat">With 12 cases you can check every one. With a real agent you'd sample 50 to 60.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section id="s5">
+  <div class="sec-head"><span class="sec-num">5</span><h2>Axial coding: cluster and trace back to the skill</h2><span class="time">10 min</span></div>
+  <div class="prose">
+    <ol class="lab-steps">
+      <li>Run:
+        <div class="code"><button class="copy" type="button">Copy</button><pre>/cluster-issues</pre></div><span class="rat">This fills in <code>review/taxonomy.md</code> with clusters, categories, counts and a column this lab adds: the SKILL.md instruction that most likely causes each cluster.</span></li>
+      <li>Challenge each "likely cause." Is it a wrong instruction, a missing instruction, or the model ignoring a correct one?<span class="rat">These need different fixes. A wrong instruction gets removed, a missing one gets added, and an ignored one may need to be clearer or checked by the tool script.</span></li>
+      <li>Mark which clusters get an eval. With one case each, severity decides, not frequency.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="s6">
+  <div class="sec-head"><span class="sec-num">6</span><h2>Detections and the Trace Investigator</h2><span class="time">10 min</span></div>
+  <div class="prose">
+    <ol class="lab-steps">
+      <li>Run <code>npm run detect</code>, then ask Copilot (Agent mode) to extend it:
+        <div class="code"><button class="copy" type="button">Copy</button><pre>Add detection rules to evals/detections.js: more than 5 tool calls, and a case with no reply.
+Run npm run detect and tell me which clusters in review/taxonomy.md are still not flagged.</pre></div></li>
+      <li>Select <strong>Trace Investigator</strong> and send:
+        <div class="code"><button class="copy" type="button">Copy</button><pre>Investigate every trace in runs/. List failure clusters with case IDs, the proving span,
+and the SKILL.md instruction behind each.</pre></div></li>
+      <li>Compare its output with your taxonomy and list confirmed findings, false positives and false negatives.</li>
+    </ol>
+    <div class="expected"><h3>Expected (reference run)</h3><p style="margin:0">Detections flag only 2 of the 5 failing cases: the tool error and the lookup loop. The invented date, the gold-tier refund and the order changed on another customer's account show up only through reading traces or through evals.</p></div>
+  </div>
+</section>
+
+<section id="s7">
+  <div class="sec-head"><span class="sec-num">7</span><h2>Rubrics and evals</h2><span class="time">15 min</span></div>
+  <div class="prose">
+    <ol class="lab-steps">
+      <li>Read <code>evals/trace-complete.eval.js</code>, <code>.github/skills/eval-authoring/SKILL.md</code> and <code>.github/instructions/evals.instructions.md</code>.<span class="rat">The scoped instructions apply automatically to any file under <code>evals/</code>. One rule matters most: evals take business rules from policy, never from SKILL.md.</span></li>
+      <li>Click the investigator's <strong>Write evals for these clusters</strong> handoff, or select <strong>eval-writer</strong>, and send one cluster at a time:
+        <div class="code"><button class="copy" type="button">Copy</button><pre>Cluster: &lt;paste the row from review/taxonomy.md&gt;
+Write the rubric first and stop so I can review it.</pre></div></li>
+      <li>Review the rubric, reply "write the eval", then check the output of <code>npm run evals -- --verbose</code>. The eval should fail on the cluster's case and pass everywhere else.</li>
+      <li>Make sure each failing case is in <code>data/golden.json</code>, then run <code>npm test</code> and commit.</li>
+    </ol>
+    <div class="expected"><h3>Expected (reference run)</h3><p style="margin:0">Five evals, each failing on exactly one case: C-02, C-03, C-07, C-09 and C-10. <code>npm test</code> is now red, which is correct. The "claims success" eval is a pattern match standing in for a classifier. Discuss where it could give false positives.</p></div>
+  </div>
+</section>
+
+<section id="s8">
+  <div class="sec-head"><span class="sec-num">8</span><h2>Fix the skill and prove it</h2><span class="time">15 min</span></div>
+  <div class="prose">
+    <ol class="lab-steps">
+      <li>Click the eval-writer's <strong>Fix the skill</strong> handoff, or select <strong>skill-fixer</strong>:
+        <div class="code"><button class="copy" type="button">Copy</button><pre>npm test is failing. Fix SKILL.md so the Maple Support agent follows data/policies/.
+Remove conflicting instructions rather than adding exceptions. Show me the diff.</pre></div><span class="rat">The skill-fixer can edit only SKILL.md. It can't weaken an eval to make the suite pass.</span></li>
+      <li>Review the diff, then run <code>npm test</code> <strong>before</strong> re-running anything.<span class="rat">Every golden case now fails as <em>stale</em>, because its trace came from the old skill hash. A skill change isn't proven until the cases run again.</span></li>
+      <li>Click <strong>Re-run the affected cases</strong>, or use <code>/run-cases cases=all</code> in a new chat.</li>
+      <li>Run <code>npm run evals</code> and <code>npm test</code>, then commit the skill and the traces together.</li>
+    </ol>
+    <div class="expected"><h3>Expected (reference run)</h3><p style="margin:0">The stale check fails all 12 golden cases. After the re-run, every eval passes on all 12 cases and <code>npm test</code> passes 12 of 12.</p></div>
+  </div>
+</section>
+
+<section id="s9">
+  <div class="sec-head"><span class="sec-num">9</span><h2>Catch a regression</h2><span class="time">10 min</span></div>
+  <div class="prose">
+    <ol class="lab-steps">
+      <li>A teammate "tidies" the skill. In the <em>Damaged items</em> section, replace the escalation sentences with <em>"Look up the order and the customer, then refund the order total."</em></li>
+      <li>Re-run the damaged-item cases in a new chat: <code>/run-cases cases=C-05 C-06 C-07</code>. Then re-run the rest, because <code>npm test</code> will flag them as stale.</li>
+      <li>Run <code>npm test</code>, read the failure, restore the sentences, re-run, and confirm green.</li>
+    </ol>
+    <div class="expected"><h3>Expected (reference run)</h3><p style="margin:0">C-06 and C-07 fail <code>refund-escalation</code> with refunds of $649 and $1180. The eval still catches this because it reads the $500 limit from <code>data/policies/returns.md</code>, not from the skill that was just edited.</p></div>
+  </div>
+</section>
+
+<section id="proof">
+  <div class="sec-head"><span class="sec-num">✓</span><h2>The reference run</h2></div>
+  <div class="prose">
+    <p>Before publishing this lab, the full loop was run end to end with every command the agent issues. Claude executed each version of SKILL.md literally, calling the same tool script the Copilot agent calls. The traces and scripts are in the facilitator kit.</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Stage</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Skill v1, starter suite</td><td><code>npm test</code> 7 of 7 pass. Reading replies alone, most cases look fine.</td></tr>
+        <tr><td>Skill v1, five evals</td><td>5 of 12 cases fail, one per cluster: loop (C-02), invented date (C-03), gold refund (C-07), silent failure (C-09), wrong account (C-10).</td></tr>
+        <tr><td>Detections</td><td>2 of the 5 flagged: C-02 and C-09.</td></tr>
+        <tr><td>SKILL.md edited to v2</td><td>All 12 golden cases reported stale until re-run.</td></tr>
+        <tr><td>Skill v2 re-run</td><td>All evals pass on 12 of 12 cases. <code>npm test</code> 12 of 12.</td></tr>
+        <tr><td>v2 with the $500 rule removed</td><td>C-06 and C-07 fail <code>refund-escalation</code>.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="confuse"><h3>Why your run may differ</h3><p style="margin:0;font-size:.95rem">Claude Sonnet 5 in Copilot won't behave identically to a literal execution. It may ignore a flawed instruction on one run and follow it on the next. When a flaw doesn't show up, the skill is still wrong: the eval protects you on the day a model does follow it. Run the cases twice and compare the traces. Consistency between runs is part of what you're evaluating.</p></div>
+  </div>
+</section>
+
+<section id="wrap">
+  <div class="sec-head"><span class="sec-num">→</span><h2>Wrap-up</h2></div>
+  <div class="prose">
+    <h3 style="margin-bottom:.6rem">Reflection questions</h3>
+    <ul class="plain">
+      <li>Which of the five flaws did you predict in Step 1, and which did only the traces reveal?</li>
+      <li>Which failures came from a wrong instruction, which from a missing one, and did the model ever ignore a correct one?</li>
+      <li>Where would the "claims success" check need a real classifier or an LLM judge?</li>
+      <li>Which of your team's skills changes most often, and what would its golden cases be?</li>
+    </ul>
+    <h3 style="margin:1.5rem 0 .6rem">Apply the pattern to your own skills</h3>
+    <ol class="lab-steps">
+      <li><strong>Instrument the skill.</strong> Route its actions through a bundled script that records spans, and store a hash of SKILL.md in each trace.<span class="rat">This gives you real traces of Copilot agent runs with no external platform.</span></li>
+      <li><strong>Keep test cases and policy outside the skill</strong>, in files the agent under test can't rewrite.<span class="rat">The skill is the variable. The policy is the fixed definition of correct.</span></li>
+      <li><strong>Gate skill changes on <code>npm test</code></strong> in your Azure DevOps pull request pipeline, with the stale-trace check on.<span class="rat">Nobody can change SKILL.md without re-running the golden cases.</span></li>
+    </ol>
+    <h3 style="margin:1.5rem 0 .6rem">Command reference</h3>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Where</th><th>Command</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Chat</td><td><code>/run-cases cases=all</code></td><td>Run cases through the Maple Support agent</td></tr>
+        <tr><td>Chat</td><td><code>/open-code</code>, <code>/cluster-issues</code></td><td>Review notes, then taxonomy</td></tr>
+        <tr><td>Terminal</td><td><code>npm run list</code> / <code>npm run view -- C-06 [--json]</code></td><td>All cases / one trace</td></tr>
+        <tr><td>Terminal</td><td><code>npm run detect</code></td><td>Detection rules</td></tr>
+        <tr><td>Terminal</td><td><code>npm run evals [-- --verbose]</code></td><td>Score every trace</td></tr>
+        <tr><td>Terminal</td><td><code>npm test</code></td><td>Golden cases: fresh skill hash and every eval passing</td></tr>
+        <tr><td>Terminal</td><td><code>npm run skill-hash</code></td><td>Current SKILL.md hash</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+<footer>Companion lab to the <em>From Traces to Evals</em> learning module. The Maple data and cases are fictional.</footer>
+</main>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement, tb=document.getElementById('themeBtn');
+  function isDark(){var t=root.getAttribute('data-theme');if(t)return t==='dark';return window.matchMedia('(prefers-color-scheme: dark)').matches;}
+  function setLabel(){tb.textContent=isDark()?'Light mode':'Dark mode';}
+  try{var s=localStorage.getItem('t2e-theme');if(s)root.setAttribute('data-theme',s);}catch(e){}
+  setLabel();
+  tb.addEventListener('click',function(){var n=isDark()?'light':'dark';root.setAttribute('data-theme',n);try{localStorage.setItem('t2e-theme',n);}catch(e){}setLabel();});
+  var prog=document.getElementById('prog');
+  var links=[].slice.call(document.querySelectorAll('#toc a'));
+  var targets=links.map(function(a){return document.querySelector(a.getAttribute('href'));});
+  function onScroll(){var h=document.documentElement,max=h.scrollHeight-h.clientHeight;prog.style.width=(max>0?h.scrollTop/max*100:0)+'%';var cur=0;for(var i=0;i<targets.length;i++){if(targets[i]&&targets[i].getBoundingClientRect().top<140)cur=i;}links.forEach(function(a,i){a.classList.toggle('active',i===cur);});}
+  window.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  document.querySelectorAll('.code .copy').forEach(function(b){
+    b.addEventListener('click',function(){
+      var text=b.parentNode.querySelector('pre').innerText;
+      function done(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy';},1500);}
+      try{navigator.clipboard.writeText(text).then(done,fallback);}catch(e){fallback();}
+      function fallback(){var r=document.createRange();r.selectNodeContents(b.parentNode.querySelector('pre'));var s=window.getSelection();s.removeAllRanges();s.addRange(r);b.textContent='Press Ctrl+C';}
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
