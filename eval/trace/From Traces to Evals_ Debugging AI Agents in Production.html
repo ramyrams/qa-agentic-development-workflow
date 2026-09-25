@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>From Traces to Evals: Debugging AI Agents in Production</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F5F8F7; --surface:#FFFFFF; --ink:#16282B; --muted:#55686B; --line:#D3DFDD;
+  --teal:#0E6E6B; --teal-soft:#E0EFED; --ochre:#A86E14; --ochre-soft:#FAF0DC;
+  --bad:#AE3B33; --bad-soft:#F8E3E1; --good:#2A7A4B; --good-soft:#E0F1E6;
+  --serif:"Fraunces", Georgia, "Times New Roman", serif;
+  --sans:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F1A1C; --surface:#16252A; --ink:#E4EEED; --muted:#9DB2B1; --line:#2A3E42;
+    --teal:#56C4BA; --teal-soft:#16332F; --ochre:#E2AD4E; --ochre-soft:#382C16;
+    --bad:#F08A80; --bad-soft:#3B1F1C; --good:#72CF98; --good-soft:#173324;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F1A1C; --surface:#16252A; --ink:#E4EEED; --muted:#9DB2B1; --line:#2A3E42;
+  --teal:#56C4BA; --teal-soft:#16332F; --ochre:#E2AD4E; --ochre-soft:#382C16;
+  --bad:#F08A80; --bad-soft:#3B1F1C; --good:#72CF98; --good-soft:#173324;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-behavior:smooth;scroll-padding-top:calc(env(safe-area-inset-top,0px) + 64px)}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+img,svg{max-width:100%}
+a{color:var(--teal)}
+:focus-visible{outline:3px solid var(--ochre);outline-offset:2px;border-radius:4px}
+h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.2;margin:0}
+h2{font-size:clamp(1.7rem,3.2vw,2.3rem);letter-spacing:-.01em}
+h3{font-size:1.2rem}
+p{margin:0 0 1em}
+code{font-family:var(--mono);font-size:.88em;background:var(--teal-soft);padding:.1em .35em;border-radius:4px}
+
+/* progress + top bar */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--paper);border-bottom:1px solid var(--line)}
+.topbar-inner{display:flex;align-items:center;gap:1rem;max-width:1180px;margin:0 auto;padding:.7rem 1.25rem}
+.brand{font-family:var(--serif);font-weight:600;font-size:1.05rem;white-space:nowrap}
+.brand span{color:var(--muted);font-family:var(--sans);font-weight:400;font-size:.9rem;margin-left:.4rem}
+.progress{height:3px;background:transparent}
+.progress i{display:block;height:100%;width:0;background:var(--teal)}
+.theme-btn{margin-left:auto;background:none;border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:.3rem .8rem;font:500 .85rem var(--sans);cursor:pointer}
+
+/* layout */
+.layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:3rem;max-width:1180px;margin:0 auto;padding:0 1.25rem}
+nav.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 70px);align-self:start;padding:2rem 0;max-height:calc(100vh - 80px);overflow:auto}
+.toc ol{list-style:none;margin:0;padding:0;counter-reset:m}
+.toc li a{display:block;padding:.35rem .6rem;border-left:2px solid var(--line);color:var(--muted);text-decoration:none;font-size:.9rem;line-height:1.35}
+.toc li a:hover{color:var(--ink)}
+.toc li a.active{border-left-color:var(--teal);color:var(--ink);font-weight:500}
+.toc .num{display:inline-block;width:1.6em;color:var(--teal);font-variant-numeric:tabular-nums}
+main{min-width:0;padding-bottom:5rem}
+section{padding:3.5rem 0 1rem;border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:0}
+.prose{max-width:68ch}
+.sec-head{display:flex;align-items:baseline;gap:1rem;margin-bottom:1.25rem}
+.sec-num{font-family:var(--serif);font-size:2.6rem;color:var(--teal);line-height:1;font-variant-numeric:lining-nums}
+.watch{font-size:.85rem;color:var(--muted);margin:-.6rem 0 1.5rem}
+.watch a{color:var(--muted)}
+
+/* hero */
+.hero{padding:3.5rem 0 2.5rem;border-bottom:1px solid var(--line)}
+.hero h1{font-size:clamp(2.2rem,5.2vw,3.6rem);letter-spacing:-.02em;max-width:18ch;font-weight:700}
+.hero .lede{font-size:1.15rem;color:var(--muted);max-width:60ch;margin:1rem 0 2rem}
+.demo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.25rem;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1.25rem}
+.panel h3{font-family:var(--sans);font-size:.9rem;font-weight:600;color:var(--muted);margin-bottom:.9rem}
+.bubble{border-radius:12px;padding:.7rem .95rem;margin-bottom:.6rem;max-width:92%;font-size:.95rem}
+.bubble.user{background:var(--teal-soft);margin-left:auto}
+.bubble.agent{background:var(--paper);border:1px solid var(--line)}
+.who{display:block;font-size:.75rem;color:var(--muted);margin-bottom:.15rem}
+.btn{font:600 .9rem var(--sans);border-radius:999px;padding:.55rem 1.1rem;cursor:pointer;border:1px solid var(--teal);background:var(--teal);color:var(--surface)}
+.btn.ghost{background:transparent;color:var(--teal)}
+.btn-row{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:.9rem}
+.verdict{margin-top:.9rem;font-size:.95rem;padding:.75rem .9rem;border-radius:10px;display:none}
+.verdict.show{display:block}
+.verdict.bad{background:var(--bad-soft);color:var(--ink);border-left:4px solid var(--bad)}
+.verdict.good{background:var(--good-soft);color:var(--ink);border-left:4px solid var(--good)}
+.hidden-trace{opacity:.35;filter:blur(3px);transition:opacity .4s, filter .4s;pointer-events:none}
+.hidden-trace.open{opacity:1;filter:none;pointer-events:auto}
+
+/* trace rail */
+.rail{list-style:none;margin:0;padding:0;position:relative}
+.rail::before{content:"";position:absolute;left:11px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.span{position:relative;padding:0 0 .7rem 2.1rem}
+.span::before{content:"";position:absolute;left:5px;top:.55rem;width:14px;height:14px;border-radius:50%;background:var(--surface);border:3px solid var(--teal)}
+.span.kind-tool::before{border-color:var(--ochre);border-radius:3px}
+.span.kind-user::before{background:var(--teal)}
+.span.err::before{border-color:var(--bad);background:var(--bad)}
+.span-btn{width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.55rem .8rem;cursor:pointer;color:var(--ink);font:500 .92rem var(--sans);display:flex;gap:.6rem;align-items:center}
+.span-btn:hover{border-color:var(--teal)}
+.span-btn .tag{font:500 .72rem var(--sans);padding:.12rem .5rem;border-radius:999px;background:var(--teal-soft);color:var(--teal);white-space:nowrap}
+.span.kind-tool .tag{background:var(--ochre-soft);color:var(--ochre)}
+.span.err .tag{background:var(--bad-soft);color:var(--bad)}
+.span-btn .chev{margin-left:auto;color:var(--muted);transition:transform .2s}
+.span-btn[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.span-body{display:none;margin-top:.4rem;padding:.7rem .85rem;border-radius:10px;background:var(--paper);border:1px dashed var(--line);font-size:.9rem}
+.span-body.open{display:block}
+.kv{font-family:var(--mono);font-size:.82rem;white-space:pre-wrap;word-break:break-word;margin:.3rem 0 0}
+.span-body .lbl{font-size:.75rem;color:var(--muted);font-weight:600;display:block;margin-top:.4rem}
+.span-body .lbl:first-child{margin-top:0}
+.errtxt{color:var(--bad)}
+
+/* callouts */
+.arc{display:grid;gap:.9rem;margin:1.5rem 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1rem 1.15rem}
+.card h3{font-family:var(--sans);font-size:.95rem;font-weight:600;margin-bottom:.35rem}
+.hook{border-left:4px solid var(--ochre)}
+.hook h3{color:var(--ochre)}
+.bridge h3{color:var(--teal)}
+.define{background:var(--teal-soft);border-color:transparent}
+.define p{font-family:var(--serif);font-size:1.12rem;line-height:1.55;margin:0}
+.define h3{color:var(--teal)}
+.why{border-left:4px solid var(--teal)}
+.confuse{background:var(--ochre-soft);border:0;border-radius:12px;padding:1rem 1.15rem;margin:1.5rem 0}
+.confuse h3{font-family:var(--sans);font-size:.95rem;font-weight:600;margin-bottom:.6rem}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.vs strong{display:block;margin-bottom:.2rem}
+.vs p{font-size:.93rem;margin:0}
+ul.plain{padding-left:1.2rem;margin:.2rem 0 1em}
+ul.plain li{margin-bottom:.35rem}
+
+/* objectives */
+.objectives{counter-reset:o;list-style:none;padding:0;margin:1.5rem 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:.75rem}
+.objectives li{counter-increment:o;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.8rem .95rem .8rem 2.6rem;position:relative;font-size:.93rem}
+.objectives li::before{content:counter(o);position:absolute;left:.9rem;top:.72rem;font-family:var(--serif);font-weight:600;color:var(--teal)}
+
+/* exercise frame */
+.exercise{margin:2rem 0;background:var(--surface);border:2px solid var(--teal);border-radius:14px;padding:1.25rem}
+.exercise > h3{font-family:var(--sans);font-size:1rem;font-weight:600;margin-bottom:.3rem}
+.exercise > .sub{color:var(--muted);font-size:.9rem;margin-bottom:1rem}
+.two{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:1.25rem}
+
+/* quiz */
+.q{padding:.9rem 0;border-top:1px solid var(--line)}
+.q:first-child{border-top:0;padding-top:0}
+.q-prompt{font-weight:500;margin-bottom:.55rem}
+.opts{display:flex;flex-wrap:wrap;gap:.45rem}
+.opt{font:500 .88rem var(--sans);background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:.4rem .85rem;cursor:pointer;text-align:left}
+.opt:hover:not([disabled]){border-color:var(--teal)}
+.opt[disabled]{cursor:default}
+.opt.right{background:var(--good-soft);border-color:var(--good);color:var(--ink)}
+.opt.wrong{background:var(--bad-soft);border-color:var(--bad);color:var(--ink)}
+.stack .opts{flex-direction:column;align-items:stretch}
+.stack .opt{border-radius:10px}
+.fb{font-size:.9rem;margin-top:.55rem;display:none}
+.fb.show{display:block}
+.fb b{margin-right:.3rem}
+.score{margin-top:1rem;font-weight:600}
+.reset{margin-top:.8rem}
+
+/* lifecycle stepper */
+.stepper-track{display:flex;gap:4px;margin-bottom:1rem}
+.stepper-track button{flex:1;height:8px;border:0;border-radius:4px;background:var(--line);cursor:pointer;padding:0}
+.stepper-track button.done{background:var(--teal)}
+.stepper-track button.cur{background:var(--ochre)}
+.phase{font-size:.8rem;color:var(--muted);font-weight:500}
+.step-title{font-family:var(--serif);font-size:1.5rem;margin:.1rem 0 .6rem}
+.ask{background:var(--ochre-soft);border-radius:10px;padding:.7rem .9rem;font-size:.93rem;margin:.8rem 0}
+.step-nav{display:flex;justify-content:space-between;align-items:center;margin-top:1rem;gap:.6rem}
+.step-nav .count{color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;margin:1rem 0}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:520px}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.8rem}
+tr.flagged td{background:var(--bad-soft)}
+.pill{display:inline-block;font-size:.75rem;font-weight:600;padding:.1rem .55rem;border-radius:999px}
+.pill.pass{background:var(--good-soft);color:var(--good)}
+.pill.fail{background:var(--bad-soft);color:var(--bad)}
+.pill.wait{background:var(--line);color:var(--muted)}
+.rules{display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;margin:.4rem 0 .6rem}
+.rules label{display:flex;gap:.4rem;align-items:center;font-size:.9rem;cursor:pointer}
+.rules input{accent-color:var(--teal);width:1rem;height:1rem}
+.flag-count{font-size:.9rem;color:var(--muted)}
+
+/* rubric */
+.rubric{display:grid;grid-template-columns:auto 1fr;gap:.4rem 1rem;font-size:.93rem}
+.rubric dt{font-weight:600}
+.rubric dd{margin:0}
+
+/* evaluator ladder */
+.ladder{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;margin:1.25rem 0}
+.rung{border:1px solid var(--line);border-radius:12px;padding:1rem;background:var(--surface)}
+.rung .cost{font-size:.78rem;color:var(--muted);margin-bottom:.4rem;display:block}
+.rung h3{font-family:var(--sans);font-size:1rem;font-weight:600;margin-bottom:.4rem}
+.rung p{font-size:.9rem;margin:0 0 .5rem}
+.rung .eg{font-size:.85rem;color:var(--muted);margin:0}
+
+/* lab */
+.lab-steps{counter-reset:s;list-style:none;padding:0;margin:0}
+.lab-steps li{counter-increment:s;position:relative;padding:0 0 1rem 2.6rem}
+.lab-steps li::before{content:counter(s);position:absolute;left:0;top:0;width:1.8rem;height:1.8rem;border-radius:50%;background:var(--teal-soft);color:var(--teal);font-weight:600;display:grid;place-items:center;font-size:.9rem}
+.lab-steps .rat{display:block;color:var(--muted);font-size:.9rem}
+.check-row{display:flex;gap:.5rem;align-items:flex-start}
+.check-row input{margin-top:.35rem;accent-color:var(--teal)}
+
+/* takeaways + glossary */
+.take{list-style:none;padding:0;margin:0;display:grid;gap:.6rem}
+.take li{padding:.8rem 1rem;border-left:3px solid var(--teal);background:var(--surface);border-radius:0 10px 10px 0}
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.6rem}
+.gloss details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.7rem .9rem}
+.gloss summary{cursor:pointer;font-weight:600}
+.gloss p{margin:.4rem 0 0;font-size:.92rem}
+footer{color:var(--muted);font-size:.85rem;padding:2rem 0}
+
+@media (max-width: 900px){
+  .layout{grid-template-columns:1fr;gap:0}
+  nav.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 50px);z-index:10;background:var(--paper);padding:.4rem 0;max-height:none;overflow-x:auto;border-bottom:1px solid var(--line);margin:0 -1.25rem;padding-left:1.25rem}
+  .toc ol{display:flex;gap:.2rem;white-space:nowrap}
+  .toc li a{border-left:0;border-bottom:2px solid transparent;padding:.35rem .55rem}
+  .toc li a.active{border-bottom-color:var(--teal)}
+  .demo,.two,.vs,.ladder{grid-template-columns:1fr}
+  .brand span{display:none}
+}
+@media print{.topbar,nav.toc,.btn,.theme-btn{display:none}.layout{display:block}.hidden-trace{opacity:1;filter:none}.span-body{display:block}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">From Traces to Evals<span>Field Guide companion module</span></div>
+    <button class="theme-btn" id="themeBtn" type="button">Dark mode</button>
+  </div>
+  <div class="progress"><i id="prog"></i></div>
+</div>
+
+<div class="layout">
+<nav class="toc" aria-label="Module sections">
+  <ol id="toc">
+    <li><a href="#start"><span class="num">·</span>Start here</a></li>
+    <li><a href="#m1"><span class="num">1</span>Quiet failures</a></li>
+    <li><a href="#m2"><span class="num">2</span>Traces and spans</a></li>
+    <li><a href="#m3"><span class="num">3</span>The eval lifecycle</a></li>
+    <li><a href="#m4"><span class="num">4</span>Open and axial coding</a></li>
+    <li><a href="#m5"><span class="num">5</span>Choosing what to eval</a></li>
+    <li><a href="#m6"><span class="num">6</span>Regression suites</a></li>
+    <li><a href="#m7"><span class="num">7</span>Detections and AI help</a></li>
+    <li><a href="#m8"><span class="num">8</span>Lab: first trace review</a></li>
+    <li><a href="#quiz"><span class="num">✓</span>Final check</a></li>
+    <li><a href="#glossary"><span class="num">≡</span>Glossary</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- HERO -->
+<header class="hero" id="start">
+  <h1>The answer looked fine. The agent still failed.</h1>
+  <p class="lede">A learning companion to Part 1 of the video series on debugging AI agents in production: how to read traces, find failure patterns, and turn those failures into evals and regression tests.</p>
+
+  <div class="demo">
+    <div class="panel">
+      <h3>What the customer saw</h3>
+      <div class="bubble user"><span class="who">Customer</span>Can you change the shipping address on my order to my work address?</div>
+      <div class="bubble agent"><span class="who">Support agent</span>Done! I've updated the shipping address on your order. You'll receive a confirmation email shortly.</div>
+      <p style="font-size:.93rem;margin:.8rem 0 0">Would you mark this run as a success?</p>
+      <div class="btn-row">
+        <button class="btn ghost" id="heroYes" type="button">Yes, looks good</button>
+        <button class="btn" id="heroOpen" type="button">Open the trace first</button>
+      </div>
+      <div class="verdict bad" id="heroVerdict"></div>
+    </div>
+    <div class="panel hidden-trace" id="heroTrace" aria-live="polite">
+      <h3>What actually happened (the trace)</h3>
+      <ol class="rail">
+        <li class="span kind-user"><div class="span-btn" style="cursor:default"><span class="tag">user</span>Change shipping address request</div></li>
+        <li class="span"><div class="span-btn" style="cursor:default"><span class="tag">LLM</span>Decides to call the address update tool</div></li>
+        <li class="span kind-tool err"><div class="span-btn" style="cursor:default"><span class="tag">tool · failed</span>update_shipping_address</div>
+          <div class="span-body open"><span class="lbl">Result</span><div class="kv errtxt">error: connection pool exhausted
+write did not complete</div></div></li>
+        <li class="span"><div class="span-btn" style="cursor:default"><span class="tag">LLM</span>Final reply: "Done! I've updated…"</div></li>
+      </ol>
+      <p style="font-size:.88rem;color:var(--muted);margin:.6rem 0 0">Recreated from the "silent tool call failure" example in the video. The tool name is illustrative.</p>
+    </div>
+  </div>
+
+  <h2 style="margin-top:3rem;font-size:1.5rem">By the end of this module you'll be able to</h2>
+  <ol class="objectives">
+    <li>Explain why a reasonable-looking answer can hide an agent failure.</li>
+    <li>Define a trace and a span, and read a trace one step at a time.</li>
+    <li>Walk the full lifecycle from reading traces to a regression suite.</li>
+    <li>Turn free-form review notes into named failure clusters.</li>
+    <li>Decide which failures deserve an eval and pick the right kind of evaluator.</li>
+    <li>Use automated detections and AI investigators without trusting them blindly.</li>
+  </ol>
+  <p class="watch" style="margin-top:1.5rem">Source video: <a href="https://www.youtube.com/watch?v=vULNPHtuCqQ" target="_blank" rel="noopener">Debugging production AI agents, Part 1</a> (about 25 minutes). Each section links to the matching timestamp.</p>
+</header>
+
+<!-- M1 -->
+<section id="m1">
+  <div class="sec-head"><span class="sec-num">1</span><h2>Why agent failures stay quiet</h2></div>
+  <p class="watch">Watch: <a href="https://www.youtube.com/watch?v=vULNPHtuCqQ&t=52s" target="_blank" rel="noopener">0:52 to 2:12</a></p>
+  <div class="prose">
+    <div class="arc">
+      <div class="card hook"><h3>In everyday life</h3><p style="margin:0">Your phone says a package was delivered, but the porch is empty. The notification is confident and complete. To find out what went wrong, you open the tracking history and see every scan. There you find it was dropped at the wrong depot two stops earlier.</p></div>
+      <div class="card bridge"><h3>In AI agents</h3><p style="margin:0">An agent's final answer is the "Delivered" notification. It can read as complete and polite while something went wrong upstream. The tool calls might all have "succeeded," your logs might show no errors, and the path might look sensible. The outcome can still be wrong.</p></div>
+    </div>
+    <p>Once an agent is in production, whether it is a support agent, a research assistant, an internal copilot or a tool-calling workflow, you need to keep evaluating it. You want to catch failures before they repeat. You also want to confirm that changes don't break what already worked, so users get a consistently good experience. The hard part is that the failure usually isn't visible in the response. It could be any of these:</p>
+    <ul class="plain">
+      <li><strong>Wrong context:</strong> the agent retrieved the wrong document or record.</li>
+      <li><strong>Right context, wrong answer:</strong> the tools returned good data, but the LLM step hallucinated anyway.</li>
+      <li><strong>Wrong path:</strong> the agent took a sequence of steps it shouldn't have.</li>
+      <li><strong>Forbidden action:</strong> the agent took an action it was never supposed to take.</li>
+      <li><strong>Ignored failure:</strong> a tool errored and the agent reported success anyway, as in the example above.</li>
+    </ul>
+    <div class="card why"><h3>Why it matters</h3><p style="margin:0">If you only review final answers, you will rate failing runs as passing. The problem then repeats until a user complains.</p></div>
+  </div>
+  <div class="exercise">
+    <h3>Quick check</h3>
+    <div class="quiz" data-set="m1"></div>
+  </div>
+</section>
+
+<!-- M2 -->
+<section id="m2">
+  <div class="sec-head"><span class="sec-num">2</span><h2>Traces and spans</h2></div>
+  <p class="watch">Watch: <a href="https://www.youtube.com/watch?v=vULNPHtuCqQ&t=132s" target="_blank" rel="noopener">2:12 to 3:47</a>, then the walkthroughs at <a href="https://www.youtube.com/watch?v=vULNPHtuCqQ&t=648s" target="_blank" rel="noopener">10:48</a> and <a href="https://www.youtube.com/watch?v=vULNPHtuCqQ&t=863s" target="_blank" rel="noopener">14:23</a></p>
+  <div class="prose">
+    <div class="arc">
+      <div class="card hook"><h3>In everyday life</h3><p style="margin:0">Go back to the package tracking history. The whole history is one shipment's journey, and each line in it (picked up, arrived at depot, out for delivery) is a single scan with its own time, place and details.</p></div>
+      <div class="card define"><h3>Plain-English definition</h3><p>A <strong>trace</strong> is the full record of one run of your agent, from the user's request to the final answer. A <strong>span</strong> is one operation inside that run, such as an LLM call, a retrieval, a tool call, a memory lookup or a hand-off. Each span holds its own inputs, outputs and execution details.</p></div>
+    </div>
+    <p>One user request goes in, many steps happen inside, and one answer comes out. Everything in between forms one trace. Instead of seeing only the input and output, you see the path the system took to get there.</p>
+  </div>
+
+  <div class="exercise">
+    <h3>Try it: read a real trace</h3>
+    <p class="sub">This is the damaged-furniture refund from the video. Store policy says refunds over $500 must go to a human. Open each span to see its details.</p>
+    <div class="two">
+      <ol class="rail" id="traceA"></ol>
+      <div>
+        <div class="card" style="margin-bottom:.9rem"><h3>Read it like a reviewer</h3>
+          <ul class="plain" style="font-size:.92rem;margin:0">
+            <li>What did the user ask for?</li>
+            <li>Which span shows where the agent got the order total?</li>
+            <li>Which span shows it applied the $500 policy?</li>
+            <li>Did the tools it called match the policy?</li>
+            <li>Is every fact in the final reply backed by a span?</li>
+          </ul>
+        </div>
+        <div class="quiz stack" data-set="m2trace"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="prose">
+    <p>The video also opens a simpler trace. A customer asks where order MP38291 is. The agent reasons that it needs to look up the order first, calls <code>lookup_order</code>, and replies that the order is in transit with FedEx, giving the tracking number. Every figure in the reply appears in the tool result, so you can tell the answer is <strong>grounded</strong>, meaning it was not made up.</p>
+    <div class="confuse">
+      <h3>Often confused</h3>
+      <div class="vs">
+        <div><strong>Trace vs. span</strong><p>A trace is the whole run. A span is one step in it. "One trace equals one run" is the rule of thumb from the video.</p></div>
+        <div><strong>Trace vs. error logs</strong><p>Error logs tell you when something crashed. A trace shows the whole path, including runs with no errors that still reached the wrong outcome.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- M3 -->
+<section id="m3">
+  <div class="sec-head"><span class="sec-num">3</span><h2>The traces-to-evals lifecycle</h2></div>
+  <p class="watch">Watch: <a href="https://www.youtube.com/watch?v=vULNPHtuCqQ&t=227s" target="_blank" rel="noopener">3:47 to 10:41</a></p>
+  <div class="prose">
+    <div class="arc">
+      <div class="card hook"><h3>In everyday life</h3><p style="margin:0">A good mechanic test-drives the car and listens for the noise. They find where it starts, name the fault, and add a check for it to the list the shop runs on every car that comes in.</p></div>
+      <div class="card bridge"><h3>In AI agents</h3><p style="margin:0">Your agent's traces are the test drive. You read them, find where each run went wrong, name the failure types, then write checks (evals) that run automatically every time you change the agent.</p></div>
+    </div>
+  </div>
+  <div class="exercise">
+    <h3>Step through the lifecycle</h3>
+    <p class="sub">Eleven steps across four phases. Use the buttons or the bar.</p>
+    <div class="stepper-track" id="stepTrack" role="tablist" aria-label="Lifecycle steps"></div>
+    <div id="stepBody" aria-live="polite"></div>
+    <div class="step-nav">
+      <button class="btn ghost" id="stepPrev" type="button">Previous</button>
+      <span class="count" id="stepCount"></span>
+      <button class="btn" id="stepNext" type="button">Next step</button>
+    </div>
+  </div>
+</section>
+
+<!-- M4 -->
+<section id="m4">
+  <div class="sec-head"><span class="sec-num">4</span><h2>Open coding and axial coding</h2></div>
+  <p class="watch">Watch: <a href="https://www.youtube.com/watch?v=vULNPHtuCqQ&t=386s" target="_blank" rel="noopener">6:26 to 8:11</a></p>
+  <div class="prose">
+    <div class="arc">
+      <div class="card hook"><h3>In everyday life</h3><p style="margin:0">After a brainstorm, the wall is covered in sticky notes, each written however people felt like writing it. Then someone sorts them into groups and gives each group a name. The same notes become something you can act on.</p></div>
+      <div class="card define"><h3>Plain-English definition</h3><p><strong>Open coding</strong> means reading a sample of traces and writing short free-form notes on anything that went wrong. <strong>Axial coding</strong> means grouping those notes into named clusters. The set of clusters becomes your error taxonomy, a named list of the ways your agent fails.</p></div>
+    </div>
+    <p>You don't need to read every trace. If the agent produced about a thousand traces in a day, sample 50 to 60 and review them one by one. In the video's example, 20 to 25 of those 50 had issues worth noting. The video's clusters were:</p>
+    <ul class="plain">
+      <li><strong>Context failure:</strong> the agent got the wrong information, or had the right information and didn't use it faithfully.</li>
+      <li><strong>Decision failure:</strong> the LLM picked the wrong action or broke a policy.</li>
+      <li><strong>Execution failure:</strong> a tool call errored, received bad arguments, or its failure was ignored.</li>
+      <li><strong>Trajectory or cost issue:</strong> the path was too long, looped, or wasted time and tokens.</li>
+    </ul>
+    <p style="font-size:.9rem;color:var(--muted)">The video names the four clusters. The one-line definitions above are working definitions for this module. The auto-generated captions call this step "actual coding," but the standard term from qualitative research is axial coding.</p>
+  </div>
+  <div class="exercise">
+    <h3>Try it: sort the open-coded notes</h3>
+    <p class="sub">Each note below is a reviewer's free-form observation. Put each one in a cluster.</p>
+    <div class="quiz" data-set="m4" data-score="1"></div>
+  </div>
+</section>
+
+<!-- M5 -->
+<section id="m5">
+  <div class="sec-head"><span class="sec-num">5</span><h2>Choosing what to eval and how</h2></div>
+  <p class="watch">Watch: <a href="https://www.youtube.com/watch?v=vULNPHtuCqQ&t=491s" target="_blank" rel="noopener">8:11 to 10:02</a></p>
+  <div class="prose">
+    <div class="arc">
+      <div class="card hook"><h3>In everyday life</h3><p style="margin:0">A building inspector doesn't write a new code rule for every scuff on a wall. Rules exist for problems that keep happening and actually put people at risk.</p></div>
+      <div class="card bridge"><h3>In AI agents</h3><p style="margin:0">Not every issue deserves an eval. Minor, one-off issues that don't really affect users can be noted and set aside. Promote a cluster into your eval taxonomy when it recurs, which the video puts at roughly ten or more traces, or when it hurts users.</p></div>
+    </div>
+    <h3 style="margin:1.5rem 0 .5rem">Step 1: write the rubric</h3>
+    <p>A rubric spells out how to recognize the issue: what counts as a pass, what counts as a fail, and when the check doesn't apply. Here is one for the refund policy from Section 2.</p>
+    <div class="card"><dl class="rubric">
+      <dt>Eval</dt><dd>High-value refund escalation</dd>
+      <dt>Pass</dt><dd>Order total over $500 and <code>escalate_to_human</code> is called, with no <code>process_refund</code> call.</dd>
+      <dt>Fail</dt><dd><code>process_refund</code> is called for an amount over $500.</dd>
+      <dt>N/A</dt><dd>No refund was requested in the trace.</dd>
+    </dl></div>
+    <h3 style="margin:1.75rem 0 .5rem">Step 2: pick the lightest evaluator that works</h3>
+  </div>
+  <div class="ladder">
+    <div class="rung"><span class="cost">Cheapest, fully repeatable</span><h3>Deterministic check</h3><p>Plain code with no model: conditions on status codes, errors, tool names, amounts, counts or latency.</p><p class="eg">Example: the tool returned an error, or a refund over $500 has no escalation.</p></div>
+    <div class="rung"><span class="cost">Moderate</span><h3>Binary classifier</h3><p>A model that gives a yes/no label when a simple rule can't read the text reliably.</p><p class="eg">Example: does this reply claim an action was completed?</p></div>
+    <div class="rung"><span class="cost">Most flexible, most costly</span><h3>LLM-as-a-judge</h3><p>A model that reasons against your rubric, for judgments that need understanding.</p><p class="eg">Example: is every claim in the answer supported by the retrieved policy text?</p></div>
+  </div>
+  <div class="prose">
+    <div class="confuse">
+      <h3>Often confused: evals vs. LLM-as-a-judge</h3>
+      <div class="vs">
+        <div><strong>The misconception</strong><p>"Writing evals" means asking another LLM to grade the output.</p></div>
+        <div><strong>What the video says</strong><p>Evals can be deterministic checks, classifiers or LLM judges. Use an LLM judge only when the check needs reasoning.</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="exercise">
+    <h3>Try it: pick the evaluator</h3>
+    <p class="sub">For each check, choose the lightest evaluator that would do the job reliably.</p>
+    <div class="quiz" data-set="m5" data-score="1"></div>
+  </div>
+</section>
+
+<!-- M6 -->
+<section id="m6">
+  <div class="sec-head"><span class="sec-num">6</span><h2>Regression suites</h2></div>
+  <p class="watch">Watch: <a href="https://www.youtube.com/watch?v=vULNPHtuCqQ&t=594s" target="_blank" rel="noopener">9:54 to 10:41</a></p>
+  <div class="prose">
+    <div class="arc">
+      <div class="card hook"><h3>In everyday life</h3><p style="margin:0">After a plumber fixes the leak under your sink, you turn on the other taps and flush the toilet. You're making sure the fix didn't break something that worked yesterday.</p></div>
+      <div class="card define"><h3>Plain-English definition</h3><p>A <strong>regression suite</strong> is the collection of evals built from the failures you've found. You rerun all of it after every change to the agent, whether that's a prompt edit, a new tool or a model swap. Old fixes should stay fixed and working behavior should keep working.</p></div>
+    </div>
+  </div>
+  <div class="exercise">
+    <h3>Try it: ship a prompt change</h3>
+    <p class="sub">Your team shortened the system prompt to cut token costs. Every test passed yesterday. Run the suite before you ship.</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Eval</th><th>Came from</th><th>Type</th><th>Before change</th><th>After change</th></tr></thead>
+      <tbody id="regBody"></tbody>
+    </table></div>
+    <div class="btn-row"><button class="btn" id="regRun" type="button">Run the suite</button></div>
+    <div class="verdict bad" id="regVerdict">The shorter prompt dropped the line about the $500 approval limit. The agent now refunds high-value orders on its own. Without the suite, this would have shipped, and customers would have found it first.</div>
+  </div>
+</section>
+
+<!-- M7 -->
+<section id="m7">
+  <div class="sec-head"><span class="sec-num">7</span><h2>Detections and AI-assisted investigation</h2></div>
+  <p class="watch">Watch: <a href="https://www.youtube.com/watch?v=vULNPHtuCqQ&t=1100s" target="_blank" rel="noopener">18:20 to 24:34</a></p>
+  <div class="prose">
+    <h3 style="margin-bottom:.5rem">Deterministic detections: flag before you open</h3>
+    <p>Detections are simple rules with no LLM involved, applied to every trace as it comes in. Examples include a tool status other than 200, an error, high latency, a cost that is too high, or more than five tool calls, which suggests an inefficient path. They tell you which traces need attention before you open anything.</p>
+  </div>
+  <div class="exercise">
+    <h3>Try it: turn detection rules on and off</h3>
+    <p class="sub">Watch which of today's traces get flagged for review.</p>
+    <div class="rules" id="rules"></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Trace</th><th>Request</th><th>Tool errors</th><th>Tool calls</th><th>Latency</th><th>Cost</th></tr></thead>
+      <tbody id="detBody"></tbody>
+    </table></div>
+    <p class="flag-count" id="flagCount"></p>
+    <p style="font-size:.9rem;margin:0">Notice that the high-value refund processed without escalation in T-209 is never flagged by these rules. Detections catch mechanical problems. Policy and reasoning failures need the evals from Section 5, or a human reading the trace.</p>
+  </div>
+
+  <div class="prose">
+    <h3 style="margin:2rem 0 .5rem">AI investigators: faster, never final</h3>
+    <p>When there are too many traces or the spans are too long to read, you can ask an agent to do a first pass. In the video, the reviewer asks the platform's chat agent to investigate the support agent's traces thoroughly and list issue clusters with trace IDs. It came back with clusters including silent tool call failures, faked actions, fact hallucinations and cross-account order modifications.</p>
+    <p>The investigator narrows down where to look. You still open every flagged trace and confirm it. As the video puts it, manual review is always required, whether the first pass was automated or not.</p>
+    <div class="confuse">
+      <h3>Often confused</h3>
+      <div class="vs">
+        <div><strong>False positive</strong><p>The investigator flagged an issue, but when you open the trace nothing is actually wrong.</p></div>
+        <div><strong>False negative</strong><p>A real issue exists in a trace, but the investigator didn't flag it. You'll only find these by sampling traces yourself.</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="exercise">
+    <h3>Try it: verify the investigator's findings</h3>
+    <p class="sub">You opened each trace to check. Label each outcome.</p>
+    <div class="quiz" data-set="m7" data-score="1"></div>
+  </div>
+  <div class="prose">
+    <div class="card" style="margin-top:1rem"><h3>About the tool in the video</h3><p style="margin:0;font-size:.93rem">The demo uses Neatlogs, an observability and evals platform. It shows the span-by-span view, comments that @-mention a teammate on a specific span, detection labels such as "Execution failed," and the chat investigator. The workflow in this module works with any tracing platform that captures spans.</p></div>
+  </div>
+</section>
+
+<!-- M8 -->
+<section id="m8">
+  <div class="sec-head"><span class="sec-num">8</span><h2>Lab: your first trace review</h2></div>
+  <div class="prose">
+    <div class="card" style="margin-bottom:1.5rem"><h3>Objectives</h3>
+      <ul class="plain" style="margin:0;font-size:.95rem">
+        <li>Produce an error taxonomy for one agent from a real sample of traces.</li>
+        <li>Write at least one rubric and choose its evaluator type.</li>
+        <li>Seed a regression suite you can rerun after every change.</li>
+      </ul>
+    </div>
+    <h3 style="margin-bottom:.8rem">Steps</h3>
+    <ol class="lab-steps">
+      <li><label class="check-row"><input type="checkbox"><span><strong>Pull a sample.</strong> Pick one agent and take 50 to 60 traces from a single day.<span class="rat">A fixed sample keeps the review manageable and gives you a rough failure rate.</span></span></label></li>
+      <li><label class="check-row"><input type="checkbox"><span><strong>Write down the expected path first.</strong> For the most common request types, list the tools the agent should call and in what order.<span class="rat">You can't spot a deviation without a baseline.</span></span></label></li>
+      <li><label class="check-row"><input type="checkbox"><span><strong>Read each trace outside-in.</strong> Check the input and output, then open every span. Note where the path first deviates.<span class="rat">The first deviation is usually the root cause. Later problems tend to follow from it.</span></span></label></li>
+      <li><label class="check-row"><input type="checkbox"><span><strong>Open-code.</strong> Write one short free-form note per problem, with the trace ID.<span class="rat">Free-form notes stop you from forcing new failures into categories you've already decided on.</span></span></label></li>
+      <li><label class="check-row"><input type="checkbox"><span><strong>Axial-code.</strong> Group the notes into named clusters and count how often each appears.<span class="rat">Counts tell you which clusters recur enough to deserve an eval.</span></span></label></li>
+      <li><label class="check-row"><input type="checkbox"><span><strong>Write rubrics</strong> for clusters that recur (around ten or more traces) or hurt users. Define pass, fail and N/A.<span class="rat">A clear rubric is what makes an eval consistent between reviewers and runs.</span></span></label></li>
+      <li><label class="check-row"><input type="checkbox"><span><strong>Choose the evaluator</strong> for each rubric: deterministic, classifier or LLM judge.<span class="rat">Lighter evaluators are cheaper, faster and more repeatable.</span></span></label></li>
+      <li><label class="check-row"><input type="checkbox"><span><strong>Add the evals to a regression suite</strong> and run it before your next prompt or tool change.<span class="rat">This is what keeps fixed failures from coming back.</span></span></label></li>
+      <li><label class="check-row"><input type="checkbox"><span><strong>Optional:</strong> run an AI investigator on the same sample and compare its list with yours.<span class="rat">Count its false positives and false negatives before you rely on it for bigger samples.</span></span></label></li>
+    </ol>
+    <div class="card" style="margin-top:1rem"><h3>Reflection questions</h3>
+      <ul class="plain" style="margin:0;font-size:.95rem">
+        <li>Which failure would you have missed if you had only read the final responses?</li>
+        <li>Which cluster was most common, and was it also the most harmful?</li>
+        <li>Which of your rubrics could be a deterministic check instead of an LLM judge?</li>
+        <li>What change are you planning to the agent next, and which evals would catch it breaking something?</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- QUIZ -->
+<section id="quiz">
+  <div class="sec-head"><span class="sec-num">✓</span><h2>Final check</h2></div>
+  <div class="exercise">
+    <h3>Six questions across the whole module</h3>
+    <p class="sub">Choose an answer to see the explanation.</p>
+    <div class="quiz stack" data-set="final" data-score="1"></div>
+  </div>
+  <div class="prose">
+    <h3 style="margin:2rem 0 .8rem">Key takeaways</h3>
+    <ul class="take">
+      <li>A confident final answer is not evidence of a successful run. Read the path.</li>
+      <li>One trace is one run, and each step inside it is a span with its own inputs and outputs.</li>
+      <li>Sample 50 to 60 traces, open-code them freely, then cluster the notes into a named error taxonomy.</li>
+      <li>Only recurring or harmful failures earn an eval, and each eval starts with a clear pass/fail rubric.</li>
+      <li>Evals aren't just LLM judges. Use deterministic checks wherever a rule is enough.</li>
+      <li>Collect the evals into a regression suite and rerun it on every change.</li>
+      <li>Detections and AI investigators speed up review, but a human still confirms every finding.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+  <div class="sec-head"><span class="sec-num">≡</span><h2>Glossary</h2></div>
+  <div class="gloss" id="gloss"></div>
+</section>
+
+<footer>Companion learning material for the video at youtube.com/watch?v=vULNPHtuCqQ. Examples are drawn from the video. Detection-table, regression and sorting data are illustrative.</footer>
+</main>
+</div>
+
+<script>
+(function(){
+  /* ---------- theme ---------- */
+  var root=document.documentElement, tb=document.getElementById('themeBtn');
+  function isDark(){var t=root.getAttribute('data-theme');if(t)return t==='dark';return window.matchMedia('(prefers-color-scheme: dark)').matches;}
+  function setLabel(){tb.textContent=isDark()?'Light mode':'Dark mode';}
+  try{var saved=localStorage.getItem('t2e-theme');if(saved)root.setAttribute('data-theme',saved);}catch(e){}
+  setLabel();
+  tb.addEventListener('click',function(){var n=isDark()?'light':'dark';root.setAttribute('data-theme',n);try{localStorage.setItem('t2e-theme',n);}catch(e){}setLabel();});
+
+  /* ---------- progress + toc ---------- */
+  var prog=document.getElementById('prog');
+  var links=[].slice.call(document.querySelectorAll('#toc a'));
+  var targets=links.map(function(a){return document.querySelector(a.getAttribute('href'));});
+  function onScroll(){
+    var h=document.documentElement; var max=h.scrollHeight-h.clientHeight;
+    prog.style.width=(max>0?(h.scrollTop/max*100):0)+'%';
+    var cur=0; for(var i=0;i<targets.length;i++){ if(targets[i] && targets[i].getBoundingClientRect().top<140) cur=i; }
+    links.forEach(function(a,i){a.classList.toggle('active',i===cur);});
+  }
+  window.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+
+  /* ---------- hero ---------- */
+  var heroTrace=document.getElementById('heroTrace'), hv=document.getElementById('heroVerdict');
+  document.getElementById('heroYes').addEventListener('click',function(){
+    heroTrace.classList.add('open');
+    hv.innerHTML='<strong>That\'s the trap.</strong> The address tool failed. Nothing was updated, yet the agent told the customer it was done. You can only see this in the trace.';
+    hv.classList.add('show');
+  });
+  document.getElementById('heroOpen').addEventListener('click',function(){
+    heroTrace.classList.add('open');
+    hv.className='verdict good show';
+    hv.innerHTML='<strong>Good instinct.</strong> The trace shows the write failed with "connection pool exhausted," but the reply says "Done." This is a silent tool call failure.';
+  });
+
+  /* ---------- trace explorer ---------- */
+  var spansA=[
+    {k:'user',tag:'user',t:'Customer message',body:[['Input','I need a full refund for my order MP80019. The furniture arrived badly damaged.']]},
+    {k:'llm',tag:'LLM',t:'Assistant turn: plan',body:[['Reasoning','Needs order details before deciding anything about the refund.'],['Decision','Call lookup_order']]},
+    {k:'tool',tag:'tool',t:'lookup_order',body:[['Arguments','{ "order_id": "MP80019" }'],['Result','{ "status": "delivered",\n  "order_total": 649.00 }']]},
+    {k:'llm',tag:'LLM',t:'Assistant turn: apply policy',body:[['Reasoning','"Order total is $649. Policy threshold for autonomous refund is $500. I need to escalate this rather than process it myself."']]},
+    {k:'tool',tag:'tool',t:'create_ticket',body:[['Arguments','{ "priority": "urgent",\n  "subject": "high-value refund" }'],['Result','{ "status": "open" }']]},
+    {k:'tool',tag:'tool',t:'escalate_to_human',body:[['Arguments','{ "reason": "Refund amount $649 exceeds $500 autonomous approval limit" }'],['Result','Escalated']]},
+    {k:'llm',tag:'LLM',t:'Final response',body:[['Output','"I\'m sorry your dining table arrived damaged. Because your refund is $649, it requires senior approval. I\'ve escalated this to our team, and someone will contact you within 1 hour to process your refund."']]}
+  ];
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function renderTrace(el,spans){
+    el.innerHTML=spans.map(function(s,i){
+      var id=el.id+'-s'+i;
+      return '<li class="span kind-'+s.k+(s.err?' err':'')+'"><button class="span-btn" type="button" aria-expanded="false" aria-controls="'+id+'"><span class="tag">'+s.tag+'</span>'+esc(s.t)+'<span class="chev" aria-hidden="true">›</span></button>'+
+        '<div class="span-body" id="'+id+'">'+s.body.map(function(b){return '<span class="lbl">'+b[0]+'</span><div class="kv">'+esc(b[1])+'</div>';}).join('')+'</div></li>';
+    }).join('');
+    el.querySelectorAll('.span-btn').forEach(function(b){
+      b.addEventListener('click',function(){var open=b.getAttribute('aria-expanded')==='true';b.setAttribute('aria-expanded',!open);document.getElementById(b.getAttribute('aria-controls')).classList.toggle('open',!open);});
+    });
+  }
+  renderTrace(document.getElementById('traceA'),spansA);
+
+  /* ---------- quiz engine ---------- */
+  var sets={
+    m1:[
+      {p:'A support agent\'s reply is accurate in tone, every tool call returned status 200, and the logs show no errors. What can you conclude?',o:['The run succeeded','Nothing yet. You need to check the path it took','The LLM must have hallucinated'],a:1,w:'Clean logs and a plausible reply are exactly what quiet failures look like. The path, meaning which context it used and which actions it took, is where you find out.'},
+      {p:'The tools returned the correct order data, but the reply states a different delivery date. Where did it go wrong?',o:['Retrieval','The LLM step, using good context badly','The tool call'],a:1,w:'The video calls this out directly: the agent had the right context from tools but hallucinated in the LLM step.'}
+    ],
+    m2trace:[
+      {p:'Which span proves the agent applied the $500 policy?',o:['lookup_order','Assistant turn: apply policy','create_ticket'],a:1,w:'The reasoning in that LLM span compares $649 with the $500 threshold and decides to escalate.'},
+      {p:'Is this trace a pass against the refund policy?',o:['Yes. It escalated and did not process the refund itself','No. It should have refunded the customer directly'],a:0,w:'Over $500 must go to a human, and it did. In the video, a teammate still left a comment that damaged goods might deserve different handling. That kind of team discussion is what trace comments are for.'}
+    ],
+    m4:[
+      {p:'"Pulled the shipping policy doc when the user asked about returns."',o:['Context','Decision','Execution','Trajectory / cost'],a:0,w:'The wrong information was retrieved, which is a context failure.'},
+      {p:'"lookup_order returned the right delivery date, but the reply stated a different one."',o:['Context','Decision','Execution','Trajectory / cost'],a:0,w:'The right context was there but wasn\'t used faithfully. This is a hallucination against context, so it counts as a context failure.'},
+      {p:'"Processed a $720 refund directly instead of escalating."',o:['Context','Decision','Execution','Trajectory / cost'],a:1,w:'The agent picked an action the policy forbids, which is a decision failure.'},
+      {p:'"Answered a return-eligibility question without calling any lookup tool."',o:['Context','Decision','Execution','Trajectory / cost'],a:1,w:'The model decided to skip a required step. The tools never got a chance to fail.'},
+      {p:'"update_shipping_address errored, and the agent told the user \'Done\'."',o:['Context','Decision','Execution','Trajectory / cost'],a:2,w:'A failed tool call whose failure was ignored is an execution failure. The investigator in the video called this a silent tool call failure.'},
+      {p:'"Called lookup_order with the customer\'s email instead of the order ID."',o:['Context','Decision','Execution','Trajectory / cost'],a:2,w:'Bad arguments to a tool are an execution failure.'},
+      {p:'"Called lookup_order four times in a row for the same order."',o:['Context','Decision','Execution','Trajectory / cost'],a:3,w:'A redundant, looping path is a trajectory or cost issue.'},
+      {p:'"A simple status question took nine tool calls and 40 seconds."',o:['Context','Decision','Execution','Trajectory / cost'],a:3,w:'The answer may have been right, but the path was wasteful. That\'s a trajectory or cost issue.'}
+    ],
+    m5:[
+      {p:'Flag any trace where a tool returned an error.',o:['Deterministic','Classifier','LLM judge'],a:0,w:'A status or error field is a simple condition, so no model is needed.'},
+      {p:'Fail any trace where process_refund ran for more than $500.',o:['Deterministic','Classifier','LLM judge'],a:0,w:'Tool names and amounts are structured data in the spans, so a rule can check them exactly.'},
+      {p:'Is every claim in the answer supported by the retrieved policy text?',o:['Deterministic','Classifier','LLM judge'],a:2,w:'This means comparing meaning across two texts, which requires reasoning.'},
+      {p:'Does the final reply claim that an action was completed?',o:['Deterministic','Classifier','LLM judge'],a:1,w:'It\'s a yes/no label on text that keyword rules would miss. Pair it with a deterministic "any tool failed?" check to catch silent failures.'},
+      {p:'Flag runs with more than five tool calls.',o:['Deterministic','Classifier','LLM judge'],a:0,w:'Counting spans is simple arithmetic.'}
+    ],
+    m7:[
+      {p:'Investigator flagged T-112 as a "silent tool failure." You open it: the address update errored and the reply said "Done."',o:['True positive','False positive','False negative'],a:0,w:'The flag was correct and the issue is real.'},
+      {p:'Investigator flagged T-087 as a "fact hallucination." You open it: every number in the reply came straight from the lookup_order result.',o:['True positive','False positive','False negative'],a:1,w:'It was flagged but isn\'t actually an issue. You can dismiss it.'},
+      {p:'Investigator did not flag T-209. While sampling, you find it refunded $649 without escalating.',o:['True positive','False positive','False negative'],a:2,w:'A real issue that wasn\'t flagged is a false negative. This is why you keep sampling traces yourself.'}
+    ],
+    final:[
+      {p:'What is a trace?',o:['A log line recorded when an error occurs','The full record of one run of the agent, made up of spans','The final answer shown to the user'],a:1,w:'One trace is one run. Every LLM call, retrieval and tool call inside it is a span.'},
+      {p:'You have 1,000 traces from yesterday. What does the video suggest?',o:['Read all 1,000 before writing any evals','Manually review a sample of about 50 to 60','Skip reading and have an LLM judge grade all of them'],a:1,w:'A manual sample surfaces the failure patterns. Automation comes after you understand them.'},
+      {p:'What is the difference between open coding and axial coding?',o:['Open coding writes free-form notes. Axial coding groups them into named clusters.','Open coding is automated. Axial coding is manual.','They are two names for the same step.'],a:0,w:'Free-form notes first, then clusters that form your error taxonomy.'},
+      {p:'Which issue should become an eval?',o:['A typo that appeared in one trace','A failure that recurs across roughly ten or more traces and affects users','Every issue you noted'],a:1,w:'Not every issue deserves an eval. Recurrence and user impact decide it.'},
+      {p:'"All evals are LLM-as-a-judge." Is that true?',o:['True','False. Evals can also be deterministic checks or classifiers'],a:1,w:'Use an LLM judge only when the check needs reasoning. Rules are cheaper and more repeatable.'},
+      {p:'An AI investigator flags 12 traces. What next?',o:['Fix the agent based on its list','Open each flagged trace and confirm it, and keep sampling for missed issues','Add all 12 as regression tests immediately'],a:1,w:'Investigators produce false positives and false negatives, so manual review is always required.'}
+    ]
+  };
+  document.querySelectorAll('.quiz').forEach(function(el){
+    var items=sets[el.dataset.set]; if(!items) return;
+    var scoring=el.dataset.score==='1'; var answered=0, right=0;
+    el.innerHTML=items.map(function(it,qi){
+      return '<div class="q"><div class="q-prompt">'+esc(it.p)+'</div><div class="opts" role="group">'+
+        it.o.map(function(o,oi){return '<button type="button" class="opt" data-q="'+qi+'" data-o="'+oi+'">'+esc(o)+'</button>';}).join('')+
+        '</div><div class="fb" aria-live="polite"></div></div>';
+    }).join('')+(scoring?'<div class="score" aria-live="polite"></div><button type="button" class="btn ghost reset">Reset</button>':'');
+    var scoreEl=el.querySelector('.score');
+    function upd(){ if(scoreEl) scoreEl.textContent=answered? right+' of '+items.length+' correct'+(answered<items.length?' so far':'') : ''; }
+    el.addEventListener('click',function(e){
+      var b=e.target.closest('.opt');
+      if(b){
+        var q=b.closest('.q'); if(q.dataset.done) return;
+        var it=items[+b.dataset.q], ok=(+b.dataset.o===it.a);
+        q.dataset.done='1'; answered++; if(ok) right++;
+        q.querySelectorAll('.opt').forEach(function(x){x.disabled=true; if(+x.dataset.o===it.a) x.classList.add('right');});
+        if(!ok) b.classList.add('wrong');
+        var fb=q.querySelector('.fb'); fb.innerHTML='<b>'+(ok?'Right.':'Not quite.')+'</b>'+esc(it.w); fb.classList.add('show');
+        upd(); return;
+      }
+      if(e.target.closest('.reset')){
+        answered=0; right=0;
+        el.querySelectorAll('.q').forEach(function(q){delete q.dataset.done; q.querySelector('.fb').classList.remove('show');});
+        el.querySelectorAll('.opt').forEach(function(x){x.disabled=false; x.classList.remove('right','wrong');});
+        upd();
+      }
+    });
+  });
+
+  /* ---------- lifecycle stepper ---------- */
+  var steps=[
+    {ph:'Capture',t:'Run the agent and collect traces',d:'Each user request goes in, many steps happen, and one answer comes out. That whole run is one trace. Make sure your agent is instrumented so every LLM call, retrieval and tool call is captured as a span.',a:'Can you open any production run and see every step the agent took?',ts:227},
+    {ph:'Read',t:'Read the trace',d:'Start with the input and output: how good was the response, and what actually happened? Then open the spans. Reading carefully is the only way to understand what your agent really does.',a:'If I only saw the output, would I rate this run the same way?',ts:290},
+    {ph:'Read',t:'Check the execution path',d:'Compare the path the agent took with the path you expected, for example tool one, then tool two, then tool three for this kind of question. A deviation is a signal to investigate.',a:'What sequence of tools should this request have used?',ts:319},
+    {ph:'Read',t:'Find the anomaly',d:'Locate where the run first went off track. Later problems often follow from that first deviation.',a:'Which span is the first one that looks wrong?',ts:345},
+    {ph:'Read',t:'Diagnose the failure',d:'Name what kind of failure it is. It could be hallucination, a citation problem, a wrong tool call, a path deviation, or good context that the agent didn\'t use properly.',a:'Is this a context, decision, execution or trajectory problem?',ts:354},
+    {ph:'Analyze',t:'Open coding',d:'Sample 50 to 60 of the day\'s traces and review them one by one. Write a short free-form note for each problem, along with the trace ID. Don\'t categorize yet.',a:'Did I note what I actually saw, rather than squeezing it into a category I already had?',ts:386},
+    {ph:'Analyze',t:'Axial coding: cluster the issues',d:'Group the notes into named clusters. The video uses context failure, decision failure, execution failure, and trajectory or cost issue. This becomes your error taxonomy.',a:'Could a teammate sort a new note into these clusters without asking me?',ts:454},
+    {ph:'Evaluate',t:'Build the eval taxonomy',d:'Not every issue deserves an eval. Leave trivial one-offs out and promote clusters that recur (roughly ten or more traces) or hurt users.',a:'How often does this happen, and how much does it cost the user?',ts:491},
+    {ph:'Evaluate',t:'Define the rubric',d:'Spell out how to identify the issue: what counts as a failure, what counts as a pass, and when the check doesn\'t apply.',a:'Would two reviewers reach the same verdict using this rubric?',ts:538},
+    {ph:'Evaluate',t:'Choose the evaluator',d:'Decide whether a deterministic rule can detect it, whether it needs a binary classifier, or whether it needs reasoning from an LLM judge. Pick the lightest option that works.',a:'Is there a rule that would catch this without a model?',ts:571},
+    {ph:'Protect',t:'Write evals into a regression suite',d:'Your evals become tests. When you improve a prompt or a tool, rerun the suite so earlier fixes and working behavior don\'t break.',a:'Which of my evals would catch the next change I\'m planning if it broke something?',ts:594}
+  ];
+  var si=0, track=document.getElementById('stepTrack'), body=document.getElementById('stepBody');
+  track.innerHTML=steps.map(function(s,i){return '<button type="button" role="tab" aria-label="Step '+(i+1)+': '+esc(s.t)+'" data-i="'+i+'"></button>';}).join('');
+  function showStep(){
+    var s=steps[si];
+    body.innerHTML='<div class="phase">Phase: '+s.ph+'</div><div class="step-title">'+(si+1)+'. '+esc(s.t)+'</div><p>'+esc(s.d)+'</p><div class="ask"><strong>Ask yourself:</strong> '+esc(s.a)+'</div><p class="watch" style="margin:0"><a href="https://www.youtube.com/watch?v=vULNPHtuCqQ&t='+s.ts+'s" target="_blank" rel="noopener">Watch this part</a></p>';
+    track.querySelectorAll('button').forEach(function(b,i){b.className=i<si?'done':(i===si?'cur':''); b.setAttribute('aria-selected',i===si);});
+    document.getElementById('stepCount').textContent=(si+1)+' of '+steps.length;
+    document.getElementById('stepPrev').disabled=si===0;
+    document.getElementById('stepNext').textContent=si===steps.length-1?'Start over':'Next step';
+  }
+  track.addEventListener('click',function(e){var b=e.target.closest('button');if(b){si=+b.dataset.i;showStep();}});
+  document.getElementById('stepPrev').addEventListener('click',function(){if(si>0){si--;showStep();}});
+  document.getElementById('stepNext').addEventListener('click',function(){si=si===steps.length-1?0:si+1;showStep();});
+  showStep();
+
+  /* ---------- regression sim ---------- */
+  var reg=[
+    ['Grounded order status','Order-status traces','Deterministic','pass'],
+    ['High-value refund escalation','Refund policy cluster','Deterministic','fail'],
+    ['No success claim after a tool error','Silent tool failure cluster','Classifier + rule','pass'],
+    ['Answer faithful to policy docs','Context failure cluster','LLM judge','pass'],
+    ['Five or fewer tool calls per run','Trajectory cluster','Deterministic','pass']
+  ];
+  var regBody=document.getElementById('regBody');
+  function pill(s){return s==='pass'?'<span class="pill pass">Pass</span>':s==='fail'?'<span class="pill fail">Fail</span>':'<span class="pill wait">Not run</span>';}
+  regBody.innerHTML=reg.map(function(r,i){return '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td>'+pill('pass')+'</td><td id="rg'+i+'">'+pill('wait')+'</td></tr>';}).join('');
+  document.getElementById('regRun').addEventListener('click',function(){
+    var btn=this; btn.disabled=true; document.getElementById('regVerdict').classList.remove('show');
+    reg.forEach(function(r,i){document.getElementById('rg'+i).innerHTML=pill('wait');});
+    var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    reg.forEach(function(r,i){ setTimeout(function(){ document.getElementById('rg'+i).innerHTML=pill(r[3]); if(i===reg.length-1){document.getElementById('regVerdict').classList.add('show');btn.disabled=false;btn.textContent='Run again';} }, reduce?0:350*(i+1)); });
+  });
+
+  /* ---------- detections ---------- */
+  var rules=[
+    {id:'err',label:'Tool returned an error',on:true,test:function(t){return t.err>0;}},
+    {id:'calls',label:'More than 5 tool calls',on:true,test:function(t){return t.calls>5;}},
+    {id:'lat',label:'Latency over 15s',on:false,test:function(t){return t.lat>15;}},
+    {id:'cost',label:'Cost over $0.05',on:false,test:function(t){return t.cost>0.05;}}
+  ];
+  var traces=[
+    {id:'T-101',r:'Where is my order?',err:0,calls:1,lat:3.2,cost:0.01},
+    {id:'T-112',r:'Change shipping address',err:1,calls:1,lat:4.1,cost:0.01},
+    {id:'T-134',r:'Return a duvet cover',err:0,calls:4,lat:8.7,cost:0.03},
+    {id:'T-150',r:'Order status (looping)',err:0,calls:9,lat:40.0,cost:0.09},
+    {id:'T-176',r:'Update payment method',err:0,calls:2,lat:18.5,cost:0.02},
+    {id:'T-209',r:'Refund damaged table ($649)',err:0,calls:2,lat:5.0,cost:0.02}
+  ];
+  var rulesEl=document.getElementById('rules'), detBody=document.getElementById('detBody');
+  rulesEl.innerHTML=rules.map(function(r){return '<label><input type="checkbox" data-r="'+r.id+'"'+(r.on?' checked':'')+'>'+r.label+'</label>';}).join('');
+  function renderDet(){
+    var n=0;
+    detBody.innerHTML=traces.map(function(t){
+      var hit=rules.filter(function(r){return r.on&&r.test(t);});
+      if(hit.length) n++;
+      return '<tr class="'+(hit.length?'flagged':'')+'"><td><strong>'+t.id+'</strong>'+(hit.length?'<br><span class="pill fail">Flagged</span>':'')+'</td><td>'+t.r+'</td><td>'+t.err+'</td><td>'+t.calls+'</td><td>'+t.lat.toFixed(1)+'s</td><td>$'+t.cost.toFixed(2)+'</td></tr>';
+    }).join('');
+    document.getElementById('flagCount').textContent=n+' of '+traces.length+' traces flagged for review.';
+  }
+  rulesEl.addEventListener('change',function(e){var id=e.target.dataset.r; rules.forEach(function(r){if(r.id===id) r.on=e.target.checked;}); renderDet();});
+  renderDet();
+
+  /* ---------- glossary ---------- */
+  var gl=[
+    ['Trace','The full record of one run of an agent, from request to final answer.'],
+    ['Span','One operation inside a trace, such as an LLM call, retrieval or tool call, with its inputs, outputs and execution details.'],
+    ['Grounded answer','An answer whose facts come from context the agent actually retrieved, which you can confirm by matching them to span outputs.'],
+    ['Path deviation','When the agent\'s sequence of steps differs from the expected sequence for that kind of request.'],
+    ['Open coding','Writing free-form notes about problems while manually reviewing a sample of traces.'],
+    ['Axial coding','Grouping open-coded notes into named clusters.'],
+    ['Error taxonomy','The named set of failure clusters for your agent, such as context, decision, execution, and trajectory or cost.'],
+    ['Eval','An automated check that decides whether a trace passes or fails on a specific issue.'],
+    ['Rubric','The pass, fail and N/A conditions that define an eval.'],
+    ['Deterministic check','An eval or detection written as plain code conditions, with no model involved.'],
+    ['Binary classifier','A model that assigns a yes/no label, used when a rule can\'t reliably read the text.'],
+    ['LLM-as-a-judge','Using an LLM to grade a trace against a rubric when the check needs reasoning.'],
+    ['Regression suite','The collection of evals rerun after every change so earlier fixes stay fixed.'],
+    ['Detection','A rule applied to incoming traces to flag ones that need attention before anyone opens them.'],
+    ['Silent tool call failure','A tool fails, but the agent ignores the failure and tells the user the action succeeded.'],
+    ['False positive','An issue that was flagged but turns out not to be real.'],
+    ['False negative','A real issue that wasn\'t flagged.']
+  ];
+  document.getElementById('gloss').innerHTML=gl.map(function(g){return '<details><summary>'+g[0]+'</summary><p>'+esc(g[1])+'</p></details>';}).join('');
+})();
+</script>
+</body>
+</html>
