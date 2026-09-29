@@ -1,7 +1,7 @@
 
 https://x.com/techyoutbe/status/2096623988227404243?s=46
 
-
+https://x.com/senthazalravi/status/2104808877925552146?s=46
 
 # qa-agentic-development-workflow
 
